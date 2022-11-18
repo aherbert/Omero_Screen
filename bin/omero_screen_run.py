@@ -1,5 +1,8 @@
 import omero_screen
-from omero_screen import loop
+from omero_screen import main, EXCEL_PATH
 
-excel_path = '/Users/hh65/Desktop/221102_cellcycle_exp6.xlsx'
-loop.omero_screen(excel_path=excel_path)
+EXEL_PATH = omero_screen.EXCEL_PATH
+if __name__ == '__main__':
+    if not EXCEL_PATH:
+        EXCEL_PATH = input("Provide path to metadata excel file: ")
+    omero_screen.main.main(excel_path=EXCEL_PATH)

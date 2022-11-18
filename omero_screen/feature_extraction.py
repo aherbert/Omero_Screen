@@ -4,12 +4,12 @@ from cellpose import models
 from skimage import measure, exposure, color
 import pandas as pd
 import numpy as np
-from omero_screen.general_functions import save_fig, generate_image
+from omero_screen.general_functions import save_fig, generate_image, filter_segmentation, omero_connect
+from omero_screen import EXCEL_PATH
+import matplotlib.pyplot as plt
+import pathlib
 
 featurelist = ['label', 'area', 'intensity_max', 'intensity_mean']
-from omero.gateway import BlitzGateway
-import json
-
 FEATURELIST = ['label', 'area', 'intensity_max', 'intensity_mean']
 
 
@@ -25,6 +25,7 @@ class Image:
             and cyto_mask
     properties:
             corr_img_dict: dictionary containing channel : flat field corrected image key value pair
+            quality_df: assembled df with median values of intensities of all corrected images and metadate
             n_mask, c_mask, cyto_mask: segmentation masks for nuclei (n_) cell (c_)  and cytoplasm (cyto_)
     """
 
@@ -45,13 +46,14 @@ class Image:
         self._well = well
         self._image = image
         self._exp_data = experiment_data
-        self._masks = flatfield_corr.mask_dict
+        self._flatfield_corr = flatfield_corr
         self._corr_img_dict = self._corr_img_dict()
+        self._quality_df = self._concat_quality_df()
         self._n_segmentation = self.n_segmentation()
         self._c_segmentation = self.c_segmentation()
         self._cyto_mask = self.get_cyto()
 
-    def get_models(self, number: int) -> 'str':
+    def _get_models(self, number: int) -> 'str':
         """
         Matches well with cell line and gets model_path for cell line from plate_layout
         :param number: int 0 or 1, 0 for nuclei model, 1 for cell model
@@ -67,7 +69,9 @@ class Image:
         for channel in list(
                 self._exp_data.channels.items()):  # produces a tuple of channel key value pair (ie ('DAPI':0)
             # get array uses channel number, divide by mask identified from corr_mask_dict via channel name
-            corr_img = generate_image(self._image, channel[1]) / self._masks[channel[0]]
+            corr_img = generate_image(self._image, channel[1]) / self._flatfield_corr.mask_dict[channel[0]]
+            # remove the border to avoid artefacts from convolution at the edge of the image
+            corr_img = corr_img[30:1050, 30:1050]
             _corr_img_dict[channel[0]] = corr_img  # using channel key here to link each image with its channel
         return _corr_img_dict
 
@@ -75,12 +79,39 @@ class Image:
     def corr_img_dict(self) -> dict:
         return self._corr_img_dict
 
+    def _set_quality_df(self, channel: str, corr_img: np.ndarray):
+        """
+        generates df for image quality control saving the median intensity of the image
+        :param corr_img: input image after flat fielding to be analysed
+        :param channel: channel of image to be analysed
+        :return: dataframe for image and channel
+        """
+        return pd.DataFrame({"experiment": [self._exp_data.plate_name],
+                             "plate_id": [self._exp_data.plate_id],
+                             "well": [self._flatfield_corr.well_pos],
+                             "image_id": [self._image.getId()],
+                             "channel": [channel],
+                             "intensity_median": [np.median(corr_img)]})
+
+    def _concat_quality_df(self) -> pd.DataFrame:
+        """
+        Concainate quality dfs for all channels in _corr_img_dict
+        :return: concatinated df
+        """
+        df_list = [self._set_quality_df(channel, image) for channel, image in self._corr_img_dict.items()]
+        return pd.concat(df_list)
+
+    @property
+    def quality_df(self):
+        return self._quality_df
+
     def n_segmentation(self) -> np.ndarray:
         """perform cellpose segmentation using nuclear mask """
-        model = models.CellposeModel(gpu=False, model_type=self.get_models(0))
+        model = models.CellposeModel(gpu=False, model_type=self._get_models(0))
         n_channels = [[0, 0]]
         n_mask_array, n_flows, n_styles = model.eval(self._corr_img_dict['DAPI'], diameter=15, channels=n_channels)
-        return n_mask_array
+        # return cleaned up mask using filter function
+        return filter_segmentation(n_mask_array)
 
     @property
     def n_mask(self) -> np.ndarray:
@@ -88,12 +119,13 @@ class Image:
 
     def c_segmentation(self) -> np.ndarray:
         """perform cellpose segmentation using cell mask """
-        model = models.CellposeModel(gpu=False, model_type=self.get_models(1))
+        model = models.CellposeModel(gpu=False, model_type=self._get_models(1))
         c_channels = [[0, 1]]
         # combine the 2 channel numpy array for cell segmentation with the nuclei channel
         comb_image = np.dstack([self._corr_img_dict['DAPI'], self._corr_img_dict['Tub']])
         c_masks_array, c_flows, c_styles = model.eval(comb_image, diameter=15, channels=c_channels)
-        return c_masks_array
+        # return cleaned up mask using filter function
+        return filter_segmentation(c_masks_array)
 
     @property
     def c_mask(self):
@@ -190,62 +222,45 @@ class ImageProperties:
         return edited_props_data
 
 
-if __name__ == "__main__":
-    with open('../secrets/config.json') as file:
-        data = json.load(file)
-    username = data['username']
-    password = data['password']
-    excel_path = '/Users/hh65/Desktop/221102_cellcycle_exp5.xlsx'
+### Tests
 
-    conn = BlitzGateway(username, password, host="ome2.hpc.susx.ac.uk")
+def segmentations_check(image):
+    def scale_img(img) -> np.array:
+        """ enhance image contract by scaling and return it"""
+        percentiles = np.percentile(img, (1, 99))
+        return exposure.rescale_intensity(img, in_range=tuple(percentiles))
 
-    conn.connect()
+    dapi_img = scale_img(image.corr_img_dict['DAPI'])
+    tub_img = scale_img(image.corr_img_dict['Tub'])
+    dapi_color_labels = color.label2rgb(image.n_mask, dapi_img, alpha=0.4, bg_label=0, kind='overlay')
+    tub_color_labels = color.label2rgb(image.cyto_mask, dapi_img, alpha=0.4, bg_label=0, kind='overlay')
+    fig, ax = plt.subplots(ncols=4, figsize=(16, 7))
+    for i in range(4):
+        ax[i].axis('off')
+        ax[i].title.set_text('timepoint')
+    ax[0].imshow(dapi_img, cmap='gray')
+    ax[0].title.set_text("DAPI channel")
+    ax[1].imshow(dapi_color_labels)
+    ax[1].title.set_text("DAPI segmentation")
+    ax[2].imshow(tub_img, cmap='gray')
+    ax[2].title.set_text("Tubulin image")
+    ax[3].imshow(tub_color_labels)
+    ax[3].title.set_text("Tubulin Segmentation")
+    save_fig(pathlib.Path('/Users/hh65/Desktop'), 'segmentation_test')
+
+
+@omero_connect
+def test_feature_extraction(excel_path, conn=None):
     well = conn.getObject("Well", 10684)
     img = well.getImage(0)
     exp_data = ExperimentData(excel_path, conn=conn)
     flatfield_corr = FlatFieldCorr(well, exp_data)
     image = Image(well, img, exp_data, flatfield_corr)
     image_data = ImageProperties(well, image, exp_data)
-    import pathlib
-    import matplotlib.pyplot as plt
-
-
-    def save_fig(fig_id, path=pathlib.Path('/Users/hh65/Desktop'), tight_layout=True, fig_extension="pdf",
-                 resolution=300):
-        dest = path / f"{fig_id}.{fig_extension}"
-        print("Saving figure", fig_id)
-        if tight_layout:
-            plt.tight_layout()
-        plt.savefig(dest, format=fig_extension, dpi=resolution)
-
-
-    def segmentations_check(image):
-        def scale_img(img) -> np.array:
-            """ enhance image contract by scaling and return it"""
-            percentiles = np.percentile(img, (1, 99))
-            return exposure.rescale_intensity(img, in_range=tuple(percentiles))
-
-        dapi_img = scale_img(image.corr_img_dict['DAPI'])
-        tub_img = scale_img(image.corr_img_dict['Tub'])
-        dapi_color_labels = color.label2rgb(image.n_mask, dapi_img, alpha=0.4, bg_label=0, kind='overlay')
-        tub_color_labels = color.label2rgb(image.cyto_mask, dapi_img, alpha=0.4, bg_label=0, kind='overlay')
-        fig, ax = plt.subplots(ncols=4, figsize=(16, 7))
-        for i in range(4):
-            ax[i].axis('off')
-            ax[i].title.set_text('timepoint')
-        ax[0].imshow(dapi_img, cmap='gray')
-        ax[0].title.set_text("DAPI channel")
-        ax[1].imshow(dapi_color_labels)
-        ax[1].title.set_text("DAPI segmentation")
-        ax[2].imshow(tub_img, cmap='gray')
-        ax[2].title.set_text("Tubulin image")
-        ax[3].imshow(tub_color_labels)
-        ax[3].title.set_text("Tubulin Segmentation")
-        save_fig('segmentation_check')
-        plt.show()
-
-
-    segmentations_check(image)
-    conn.close()
-
     image_data.image_properties.to_csv('/Users/hh65/Desktop/test_data.csv')
+    segmentations_check(image)
+
+
+if __name__ == "__main__":
+
+    test_feature_extraction(EXCEL_PATH)
