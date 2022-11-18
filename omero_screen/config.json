@@ -1,0 +1,15 @@
+{
+    "DEFAULT_DEST_DIR": "Desktop",
+    "ID_INFO_TAB": "Plate_ID",
+    "ID_INFO_LOCATION": "('Plate_ID', 0)",
+    "CHANNELS_TAB": "Channels",
+    "LAYOUT_TAB": "Plate_Layout",
+    "LAYOUT_COLS": "('Well', 'Well_ID, 'Cell_Line, 'Condition)",
+    "SEGMENTATION_TAB": "Segmentation",
+    "FLATFIELD_TEMPLATES": "flatfield_correction_images",
+    "FLATFIELD_REPRESENTATIVE": "flatfield_correction_representative_images",
+    "DATA": "single_cell_data",
+    "QUALITY_CONTROL": "quality_control",
+    "IMGS_CORR": "images_corrected"
+
+}
