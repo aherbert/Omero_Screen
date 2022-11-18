@@ -27,13 +27,13 @@ class FlatFieldCorr:
     """
     _well_pos: str
 
-    def __init__(self, current_well: 'Omero Well Object', experiment_data: ExperimentData):
+    def __init__(self, current_well: 'Omero Well Object', experiment_data: ExperimentData, well_pos: str):
         """ Initiates the class with well parameter and path and channel information from the ExperimentData class"""
 
         self.mask_dict = None
         self._well = current_well
         self._exp_data = experiment_data
-        self._well_pos = get_well_pos(self._exp_data.plate_layout, self._well.getId())
+        self._well_pos = well_pos
         self.generate_channel_masks()
 
     @property
