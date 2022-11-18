@@ -6,6 +6,8 @@ import functools
 import matplotlib.pyplot as plt
 import json
 import random
+import getpass
+
 
 
 def save_fig(path, fig_id, tight_layout=True, fig_extension="pdf", resolution=300):
@@ -19,10 +21,14 @@ def save_fig(path, fig_id, tight_layout=True, fig_extension="pdf", resolution=30
 def omero_connect(func):
     @functools.wraps(func)
     def wrapper_omero_connect(*args, **kwargs):
-        with open('../secrets/config.json') as file:
-            data = json.load(file)
-        username = data['username']
-        password = data['password']
+        try:
+            with open('../secrets/config.json') as file:
+                data = json.load(file)
+            username = data['username']
+            password = data['password']
+        except IOError:
+            username = input("username: ")
+            password = input("password: ")
         conn = BlitzGateway(username, password, host="ome2.hpc.sussex.ac.uk")
         conn.connect()
         print('connecting to Omero')
