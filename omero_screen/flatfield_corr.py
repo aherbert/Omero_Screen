@@ -1,12 +1,12 @@
 from omero.gateway import BlitzGateway
 from omero_screen.data_structure import ExperimentData
 from omero_screen.aggregator import ImageAggregator
-from omero_screen.general_functions import save_fig, scale_img, generate_image, generate_random_image, get_well_pos
+from omero_screen.general_functions import save_fig, scale_img, generate_image, generate_random_image, get_well_pos, \
+    omero_connect
+from omero_screen import EXCEL_PATH
 from skimage import io
 import matplotlib.pyplot as plt
-from random import randint
 import numpy as np
-import json
 from tqdm import tqdm
 import matplotlib
 
@@ -23,8 +23,9 @@ class FlatFieldCorr:
     col and channel number in the flatfield_correction_images folder.
     Public attributes:
     FlatFieldCorr.mask_list, a list of numpy nd arrays. These images are used for flatfiel correction for each channel.
-    The order in the list correslpinds to the channel number.
+    The order in the list correslponds to the channel number.
     """
+    _well_pos: str
 
     def __init__(self, current_well: 'Omero Well Object', experiment_data: ExperimentData):
         """ Initiates the class with well parameter and path and channel information from the ExperimentData class"""
@@ -35,6 +36,9 @@ class FlatFieldCorr:
         self._well_pos = get_well_pos(self._exp_data.plate_layout, self._well.getId())
         self.generate_channel_masks()
 
+    @property
+    def well_pos(self):
+        return self._well_pos
 
     def generate_channel_masks(self):
         """
@@ -106,20 +110,14 @@ class FlatFieldCorr:
         save_fig(self._exp_data.flatfield_imgs_path, fig_id)
         plt.close(fig)
 
-
-if __name__ == "__main__":
-    with open('../secrets/config.json') as file:
-        data = json.load(file)
-    username = data['username']
-    password = data['password']
-    excel_path = '/Users/hh65/Desktop/221102_cellcycle_exp5.xlsx'
-
-    conn = BlitzGateway(username, password, host="ome2.hpc.susx.ac.uk")
-
-    conn.connect()
+@omero_connect
+def flatfield_test(excel_path, conn=None):
     well = conn.getObject("Well", 10707)
     exp_data = ExperimentData(excel_path, conn=conn)
-    flatfield_corr = FlatFieldCorr(well, exp_data)
-    conn.close()
+    return FlatFieldCorr(well, exp_data)
 
+if __name__ == "__main__":
+    flatfield_corr = flatfield_test(EXCEL_PATH)
     print(flatfield_corr.mask_dict['DAPI'].shape)
+
+

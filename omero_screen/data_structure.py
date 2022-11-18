@@ -7,8 +7,8 @@ Reads data from excel_path and stores them
 # TODO switch experiment meta data from excelfile to omero directly
 import pandas as pd
 import pathlib
-from omero.gateway import BlitzGateway
-import json
+from omero_screen.general_functions import omero_connect
+from omero_screen import EXCEL_PATH
 
 
 class Defaults:
@@ -129,19 +129,12 @@ class ExperimentData:
         return self._priv_corr_imgs
 
 
+@omero_connect
+def exp_data_test(excel_path, conn=None):
+    return ExperimentData(excel_path, conn)
+
+
 if __name__ == "__main__":
-    excel_path = '/Users/hh65/Desktop/221102_cellcycle_exp5.xlsx'
-
-    with open('../secrets/config.json') as file:
-        data = json.load(file)
-    username = data['username']
-    password = data['password']
-
-    conn = BlitzGateway(username, password, host="ome2.hpc.susx.ac.uk")
-    conn.connect()
-
-    exp_data = ExperimentData(excel_path, conn)
-
-    conn.close()
+    exp_data = exp_data_test(EXCEL_PATH)
 
     print(exp_data.plate_layout)

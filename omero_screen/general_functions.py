@@ -1,16 +1,26 @@
+import pandas as pd
 from omero.gateway import BlitzGateway
+import pathlib
 import numpy as np
 from skimage import exposure, color
+from skimage.segmentation import clear_border
 import time
 import functools
 import matplotlib.pyplot as plt
 import json
 import random
-import getpass
 
 
-
-def save_fig(path, fig_id, tight_layout=True, fig_extension="pdf", resolution=300):
+def save_fig(path: pathlib, fig_id: str, tight_layout=True, fig_extension="pdf", resolution=300) -> None:
+    """
+    coherent saving of matplotlib figures as pdfs (default)
+    :param path: path for saving
+    :param fig_id: name of saved figure
+    :param tight_layout: option, default True
+    :param fig_extension: option, default pdf
+    :param resolution: option, default 300dpi
+    :return: None, saves Figure in poth
+    """
     dest = path / f"{fig_id}.{fig_extension}"
     # print("Saving figure", fig_id)
     if tight_layout:
@@ -19,6 +29,12 @@ def save_fig(path, fig_id, tight_layout=True, fig_extension="pdf", resolution=30
 
 
 def omero_connect(func):
+    """
+    decorator to log in and generate omero connection
+    :param func: function to be decorated
+    :return: wrapper function: passes conn to function and closes it after execution
+    """
+
     @functools.wraps(func)
     def wrapper_omero_connect(*args, **kwargs):
         try:
@@ -41,6 +57,12 @@ def omero_connect(func):
 
 
 def time_it(func):
+    """
+    decorator to time functions
+    :param func: function
+    :return: wrapper that prints  times
+    """
+
     @functools.wraps(func)
     def wrapper_time_it(*args, **kwargs):
         start_time = time.time()
@@ -53,7 +75,7 @@ def time_it(func):
 
 
 def scale_img(img: np.array, percentile: tuple[float, float] = (1, 99)) -> np.array:
-    """Increase contract by scaling image to exclude lowest and higest intensities"""
+    """Increase contrast by scaling image to exclude lowest and highest intensities"""
     percentiles = np.percentile(img, (percentile[0], percentile[1]))
     return exposure.rescale_intensity(img, in_range=tuple(percentiles))
 
@@ -62,8 +84,6 @@ def generate_image(image: 'Omero image object', channel: int) -> np.ndarray:
     """
     Turn Omero Image Object from Well into numpy nd-array that is returned
 
-    :param well: Omero Image Object
-    :param img_number: number to access the image in the wel object
     :param channel: channel number
     :return: numpy.ndarray
     """
@@ -95,5 +115,25 @@ def color_label(mask: np.ndarray, img: np.ndarray) -> np.ndarray:
     return color.label2rgb(mask, img, alpha=0.4, bg_label=0, kind='overlay')
 
 
-def get_well_pos(df, id):
+def get_well_pos(df: pd.DataFrame, id: int or float) -> str:
+    """
+    Simplifies df filtering to get well position from layout dataframe
+    :param df: layout dataframe
+    :param id: well_id
+    :return: well position in dat frame
+    """
     return df[df['Well_ID'] == id]['Well'].iloc[0]
+
+
+def filter_segmentation(mask: np.ndarray) -> np.ndarray:
+    """
+    removes border objects and filters large abd small objects from segmentation mask
+    :param mask: unfiltered segmentation mask
+    :return: filtered segmentation mask
+    """
+    cleared = clear_border(mask)
+    sizes = np.bincount(cleared.ravel())
+    mask_sizes = (sizes > 80) & (sizes < 4000)
+    mask_sizes[0] = 0
+    cells_cleaned = mask_sizes[cleared]
+    return cells_cleaned * mask
