@@ -19,7 +19,7 @@ def main(excel_path=EXCEL_PATH, conn=None):
         well_data, well_quality = well_loop(well, meta_data, exp_paths, flatfield_dict)
         df_final = pd.concat([df_final, well_data])
         df_quality_control = pd.concat([df_quality_control, well_quality])
-    df_final = pd.concat([df_final.iloc[:,- 7:], df_final.iloc[:,:7]], axis=1)
+    df_final = pd.concat([df_final.iloc[:,- 7:], df_final.iloc[:,:-7]], axis=1)
     df_final.to_csv(exp_paths.final_data / f"{exp_paths.plate_name}_final_data.csv")
     df_quality_control.to_csv(exp_paths.quality_ctr / f"{exp_paths.plate_name}_quality_data.csv")
 
