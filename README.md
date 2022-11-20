@@ -7,3 +7,5 @@ Requires a connection to an active Omero server
 
 ## Contributors
 Robert Zach, Haoran Yue, Alex Herbert and Helfrid Hochegger
+
+## 
