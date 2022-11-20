@@ -9,6 +9,7 @@ import functools
 import matplotlib.pyplot as plt
 import json
 import random
+import getpass
 
 
 def save_fig(path: pathlib, fig_id: str, tight_layout=True, fig_extension="pdf", resolution=300) -> None:
@@ -38,13 +39,13 @@ def omero_connect(func):
     @functools.wraps(func)
     def wrapper_omero_connect(*args, **kwargs):
         try:
-            with open('../secrets/config.json') as file:
+            with open('../data/secrets/config.json') as file:
                 data = json.load(file)
             username = data['username']
             password = data['password']
         except IOError:
             username = input("username: ")
-            password = input("password: ")
+            password = getpass.getpass(prompt='Password ')
         conn = BlitzGateway(username, password, host="ome2.hpc.sussex.ac.uk")
         conn.connect()
         print('connecting to Omero')
@@ -113,16 +114,6 @@ def color_label(mask: np.ndarray, img: np.ndarray) -> np.ndarray:
     :return: color labels for matplotlib
     """
     return color.label2rgb(mask, img, alpha=0.4, bg_label=0, kind='overlay')
-
-
-def get_well_pos(df: pd.DataFrame, id: int or float) -> str:
-    """
-    Simplifies df filtering to get well position from layout dataframe
-    :param df: layout dataframe
-    :param id: well_id
-    :return: well position in dat frame
-    """
-    return df[df['Well_ID'] == id]['Well'].iloc[0]
 
 
 def filter_segmentation(mask: np.ndarray) -> np.ndarray:

@@ -141,7 +141,7 @@ cython_debug/
 
 *.DS_Store
 *__pycache__*
-*.csv
+
 
 secrets/
 
