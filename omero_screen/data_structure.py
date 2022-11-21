@@ -25,6 +25,7 @@ class Defaults:
     DATA = "single_cell_data"
     QUALITY_CONTROL = "quality_control"
     IMGS_CORR = "images_corrected"
+    TEMP_WELL_DATA = "temp_well_data"
 
 
 class MetaData:
@@ -88,10 +89,11 @@ class ExpPaths:
         self.final_data = self.path / Defaults.DATA
         self.quality_ctr = self.path / Defaults.QUALITY_CONTROL
         self.example_img = self.path / Defaults.IMGS_CORR
+        self.temp_well_data = self.path / Defaults.TEMP_WELL_DATA
 
     def _create_exp_dir(self):
         path_list = [self.path, self.flatfield_templates, self.flatfield_rep_figs, self.final_data,
-                     self.quality_ctr, self.example_img]
+                     self.quality_ctr, self.example_img, self.temp_well_data]
         for path in path_list:
             path.mkdir(exist_ok=True)
         self.meta_data.plate_layout.to_csv(self.path / "Plate_layout.csv")

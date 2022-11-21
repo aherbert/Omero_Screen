@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 import omero_screen
-from omero_screen import main, EXCEL_PATH
+from omero_screen import main
 
-EXEL_PATH = omero_screen.EXCEL_PATH
+EXCEL_PATH = None
+
 if __name__ == '__main__':
     if not EXCEL_PATH:
         EXCEL_PATH = input("Provide path to metadata excel file: ")
