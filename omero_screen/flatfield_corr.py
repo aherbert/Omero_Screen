@@ -10,8 +10,10 @@ from tqdm import tqdm
 import matplotlib
 import pathlib
 import glob
+import platform
 
-matplotlib.use('MacOSX')  # avoid matplotlib warning about interactive backend
+if platform.system() == 'Darwin':
+    matplotlib.use('MacOSX')  # avoid matplotlib warning about interactive backend
 
 
 def flatfieldcorr(well, meta_data, exp_paths) -> dict:

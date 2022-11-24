@@ -44,14 +44,20 @@ def omero_connect(func):
             username = data['username']
             password = data['password']
         except IOError:
-            username = input("username: ")
-            password = getpass.getpass(prompt='Password ')
+            username = input("Username: ")
+            password = getpass.getpass(prompt='Password: ')
         conn = BlitzGateway(username, password, host="ome2.hpc.sussex.ac.uk")
-        conn.connect()
-        print('connecting to Omero')
-        value = func(*args, **kwargs, conn=conn)
-        conn.close()
-        print('disconnecting from Omero')
+        value = None
+        try:
+            print('Connecting to Omero')
+            if conn.connect():
+                value = func(*args, **kwargs, conn=conn)
+                print('Disconnecting from Omero')
+            else:
+                print('Failed to connect to Omero: %s' % conn.getLastError())
+        finally:
+            # No side effects if called without a connection
+            conn.close()
         return value
 
     return wrapper_omero_connect
