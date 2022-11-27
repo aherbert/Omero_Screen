@@ -23,6 +23,5 @@ to the Omero server using the GDSC HCC script on the server.
 
 
 ### TODO Generate module to make Figures for cell cycle data
-### TODO Add omero screen metadata storage functionality
 ### TODO use classifier for mitotic interphase separation and free up H3 channel
 
