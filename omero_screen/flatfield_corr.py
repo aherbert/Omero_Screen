@@ -2,7 +2,7 @@ from omero_screen.aggregator import ImageAggregator
 from omero_screen.general_functions import save_fig, scale_img, generate_image, generate_random_image, \
     omero_connect
 from omero_screen.data_structure import MetaData, ExpPaths
-from omero_screen import EXCEL_PATH, SEPARATOR
+from omero_screen import SEPARATOR
 from skimage import io
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,14 +23,12 @@ def flatfieldcorr(well, meta_data, exp_paths) -> dict:
     """
 
     channels = meta_data.channels
-    well_pos = meta_data.well_pos(well.getId())
+    well_pos = f"row_{well.row}_col{well.column}"
     template_path = exp_paths.flatfield_templates
-    rep_fig_path = exp_paths.flatfield_rep_figs
     template_subfolder_path = template_path / f"{well_pos}"
-    rep_fig_subfolder_path = rep_fig_path / f"{well_pos}"
-    if pathlib.Path.exists(template_subfolder_path):
+    if len(glob.glob(f"{str(template_subfolder_path)}/*.tif")) == 4:
         return load_corr_dict(template_subfolder_path, channels)
-    return generate_corr_dict(well, well_pos, channels, template_subfolder_path, rep_fig_subfolder_path)
+    return generate_corr_dict(well, well_pos, channels, template_subfolder_path)
 
 
 def load_corr_dict(path, channels):
@@ -42,22 +40,22 @@ def load_corr_dict(path, channels):
         return dict(zip(channel_list, array_list))
 
 
-def generate_corr_dict(well, well_pos, channels, template_path, rep_image_path):
+def generate_corr_dict(well, well_pos, channels, template_subfolder_path):
     """
     Saves each flat field mask file with well position and channel name
     :return: a dictionary with channel_name : flatfield correction masks
     """
     print(f"\nAssembling Flatfield Correction Masks for each Channel\n{SEPARATOR}")
-    template_path.mkdir(exist_ok=True)
-    rep_image_path.mkdir(exist_ok=True)
+    template_subfolder_path.mkdir(exist_ok=True)
+    template_subfolder_path.mkdir(exist_ok=True)
     corr_dict = {}
     # iteration extracts tuple (channel_name, channel_number) as channel
     for channel in tqdm(list(channels.items())):
         corr_img_id = f"{well_pos}_{channel[0]}"
         norm_mask = aggregate_imgs(well, channel)
-        io.imsave(template_path / f"{corr_img_id}_flatfield_masks.tif", norm_mask)
+        io.imsave(template_subfolder_path / f"{corr_img_id}_flatfield_masks.tif", norm_mask)
         example = gen_example(well, channel, norm_mask)
-        example_fig(example, well_pos, channel, rep_image_path)
+        example_fig(example, well_pos, channel, template_subfolder_path)
         corr_dict[channel[0]] = norm_mask  # associates channel name with flatfield mask
     return corr_dict
 
@@ -109,12 +107,12 @@ def example_fig(data_list, well_pos, channel, path):
 
 if __name__ == "__main__":
     @omero_connect
-    def flatfield_test(excel_path, conn=None):
-        meta_data = MetaData(excel_path)
-        exp_paths = ExpPaths(conn, meta_data)
-        well = conn.getObject("Well", 10707)
+    def flatfield_test(conn=None):
+        meta_data = MetaData(948, conn)
+        exp_paths = ExpPaths(meta_data)
+        well = conn.getObject("Well", 10636)
         return flatfieldcorr(well, meta_data, exp_paths)
 
 
-    flatfield_corr = flatfield_test(EXCEL_PATH)
+    flatfield_corr = flatfield_test()
     print(flatfield_corr['DAPI'].shape)

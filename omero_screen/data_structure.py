@@ -7,25 +7,11 @@ Reads data from excel_path and stores them
 # TODO switch experiment meta data from excelfile to omero directly
 import pandas as pd
 import pathlib
-from omero_screen import EXCEL_PATH, SEPARATOR
+from omero_screen import Defaults, SEPARATOR
+from omero_screen.general_functions import omero_connect
 
 
 
-class Defaults:
-    """Store the default variables to read the Excel input file"""
-    DEFAULT_DEST_DIR = "Desktop"  # Decides where the final data folder will be made
-    ID_INFO_TAB = "Plate_ID"
-    ID_INFO_LOCATION = ("Plate_ID", 0)
-    CHANNELS_TAB = "Channels"
-    LAYOUT_TAB = "Plate_Layout"
-    LAYOUT_COLS = ("Well", "Well_ID", "Cell_Line", "Condition")
-    SEGMENTATION_TAB = "Segmentation"
-    FLATFIELD_TEMPLATES = "flatfield_correction_images"
-    FLATFIELD_REPRESENTATIVE = "flatfield_correction_representative_images"
-    DATA = "single_cell_data"
-    QUALITY_CONTROL = "quality_control"
-    IMGS_CORR = "images_corrected"
-    TEMP_WELL_DATA = "temp_well_data"
 
 
 class MetaData:
@@ -34,73 +20,68 @@ class MetaData:
      Class Methods Extract Well specific information
      """
 
-    def __init__(self, excel_path):
-        self._excel_path = excel_path
-        self._extract_excel_data()
+    def __init__(self, plate_id, conn):
+        self.conn = conn
+        self.plate_obj = self.conn.getObject("Plate", plate_id)
+        self.plate = self.plate_obj.getName()
+        self._extract_meta_data()
         self.df_final = pd.DataFrame()
         self.df_quality = pd.DataFrame()
 
-    def _extract_excel_data(self):
+    def _extract_meta_data(self):
         """Read Tabs from Excel and stor as class properties
         Attributes: plate_id (int), channels (dict), plate_layout (df), segmentation models (paths)
 
         """
-        self.plate_id: int = pd.read_excel(self._excel_path, Defaults.ID_INFO_TAB)[Defaults.ID_INFO_LOCATION[0]][
-            Defaults.ID_INFO_LOCATION[1]]
-        self.channels: dict = \
-            pd.read_excel(self._excel_path, Defaults.CHANNELS_TAB).set_index(Defaults.CHANNELS_TAB).to_dict("dict")[
-                "Index"]
-        self.plate_layout = pd.read_excel(self._excel_path, "Plate_Layout",
-                                          converters={Defaults.LAYOUT_COLS[0]: str, Defaults.LAYOUT_COLS[0]: int,
-                                                      Defaults.LAYOUT_COLS[0]: str,
-                                                      Defaults.LAYOUT_COLS[0]: str}).dropna()
-        self.segmentation_models: dict = pd.read_excel(self._excel_path, Defaults.SEGMENTATION_TAB).drop(
-            Defaults.SEGMENTATION_TAB, axis=1).to_dict("list")
-        self._priv_segmentation_models: dict = pd.read_excel(self._excel_path, Defaults.SEGMENTATION_TAB).drop(
-            Defaults.SEGMENTATION_TAB, axis=1).to_dict("list")
-        self.plate_length = len(self.plate_layout)
 
-    def well_pos(self, current_well_id):
-        df = self.plate_layout
-        return df[df['Well_ID'] == current_well_id]['Well'].iloc[0]
+        ann = self.plate_obj.getAnnotation(Defaults.NS)
+        channels = dict(ann.getValue())
+        # chaning channel number to integer type
+        for key in channels:
+            channels[key] = int(channels[key])
+        self.channels = channels
+        self.plate_length = len(list(self.plate_obj.listChildren()))
 
-    def well_cell_line(self, current_well_id):
-        df = self.plate_layout
-        return df[df['Well_ID'] == current_well_id]['Cell_Line'].iloc[0]
+    def well_conditions(self, current_well):
+        well = self.conn.getObject("Well", current_well)
+        ann = well.getAnnotation(Defaults.NS)
+        return dict(ann.getValue())
 
-    def well_condition(self, current_well_id):
-        df = self.plate_layout
-        return df[df['Well_ID'] == current_well_id]['Condition'].iloc[0]
 
 
 class ExpPaths:
-    def __init__(self, conn, meta_data: MetaData):
+    def __init__(self, meta_data: MetaData):
         self.meta_data = meta_data
-        self.plate = conn.getObject("Plate", self.meta_data.plate_id)
-        self.plate_name = self.plate.getName()
         self._create_dir_paths()
         self._create_exp_dir()
 
     def _create_dir_paths(self):
         """ Generate path attributes for experiment"""
-        self.path = pathlib.Path.home() / Defaults.DEFAULT_DEST_DIR / f"{self.plate.getName()}"
+        self.path = pathlib.Path.home() / Defaults.DEFAULT_DEST_DIR / f"{self.meta_data.plate}"
         self.flatfield_templates = self.path / Defaults.FLATFIELD_TEMPLATES
-        self.flatfield_rep_figs = self.path / Defaults.FLATFIELD_REPRESENTATIVE
         self.final_data = self.path / Defaults.DATA
         self.quality_ctr = self.path / Defaults.QUALITY_CONTROL
         self.example_img = self.path / Defaults.IMGS_CORR
         self.temp_well_data = self.path / Defaults.TEMP_WELL_DATA
 
     def _create_exp_dir(self):
-        path_list = [self.path, self.flatfield_templates, self.flatfield_rep_figs, self.final_data,
+        path_list = [self.path, self.flatfield_templates, self.final_data,
                      self.quality_ctr, self.example_img, self.temp_well_data]
         for path in path_list:
             path.mkdir(exist_ok=True)
-        self.meta_data.plate_layout.to_csv(self.path / "Plate_layout.csv")
-        print(f'Gathering data and assembling directories for experiment {self.plate.getName()}\n{SEPARATOR}')
+
+        print(f'Gathering data and assembling directories for experiment {self.meta_data.plate}\n{SEPARATOR}')
+
+@omero_connect
+def test_module(conn=None):
+    meta_data = MetaData(1054, conn)
+    paths = ExpPaths(meta_data)
+    print(meta_data.well_conditions(11353)['Cell_Line'])
+    print(meta_data.channels)
+
+
 
 
 if __name__ == "__main__":
-    meta_data = MetaData(EXCEL_PATH)
+    meta_data = test_module()
 
-    print(meta_data.well_pos())

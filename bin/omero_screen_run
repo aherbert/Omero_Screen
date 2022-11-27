@@ -3,9 +3,9 @@
 import omero_screen
 from omero_screen import main
 
-EXCEL_PATH = None
+PLATE_ID = None
 
 if __name__ == '__main__':
-    if not EXCEL_PATH:
-        EXCEL_PATH = input("Provide path to metadata excel file: ")
-    omero_screen.main.main(excel_path=EXCEL_PATH)
+    if not PLATE_ID:
+        PLATE_ID = input("Provide the PlateID: ")
+    omero_screen.main.main(PLATE_ID)

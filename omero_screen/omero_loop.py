@@ -10,8 +10,9 @@ import pathlib
 # Functions to loop through well object, assemble data for images and ave quality control data
 
 def well_loop(well, meta_data, exp_paths, flatfield_dict):
-    df_well_path = exp_paths.temp_well_data / f'{meta_data.well_pos(well.getId())}_df_well'
-    df_well_quality_path = exp_paths.temp_well_data / f'{meta_data.well_pos(well.getId())}_df_well_quality'
+    well_pos = well_pos = f"row_{well.row}_col{well.column}"
+    df_well_path = exp_paths.temp_well_data / f'{well_pos}_df_well'
+    df_well_quality_path = exp_paths.temp_well_data / f'{well_pos}_df_well_quality'
     # check if file already exists to load dfs and move on
     if pathlib.Path.exists(df_well_path) and pathlib.Path.exists(df_well_quality_path):
         print(f"\nWell has already been analysed, loading data\n{SEPARATOR}")
