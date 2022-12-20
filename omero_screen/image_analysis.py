@@ -33,8 +33,8 @@ class Image:
 
     def _get_metadata(self):
         self.channels = self._meta_data.channels
-        self.cell_line = self._meta_data.well_conditions(self._well.getId())['Cell_Line']
-        # self.condition = self._meta_data.well_conditions(self._well.getId())['Condition']
+        self.cell_line = self._meta_data.well_conditions(self._well.getId())['cell_line']
+        # self.condition = self._meta_data.well_conditions(self._well.getId())['condition']
         row_list = list('ABCDEFGHIJKL')
         self.well_pos = f"{row_list[self._well.row]}{self._well.column}"
 
@@ -44,9 +44,10 @@ class Image:
         for channel in list(
                 self.channels.items()):  # produces a tuple of channel key value pair (ie ('DAPI':0)
             corr_img = generate_image(self.omero_image, channel[1]) / self._flatfield_dict[channel[0]]
-            # remove the border to avoid artefacts from convolution at the edge of the image
             corr_img = corr_img[30:1050, 30:1050]
-            img_dict[channel[0]] = corr_img  # using channel key here to link each image with its channel
+            bg_corr_img = corr_img - np.median(corr_img)
+            bg_corr_img[np.where(bg_corr_img <= 100)] = 100
+            img_dict[channel[0]] = bg_corr_img  # using channel key here to link each image with its channel
         return img_dict
 
     def _get_models(self):
@@ -174,7 +175,7 @@ class ImageProperties:
             # self._image.condition,
             ]
         cond_list.extend(iter(self._cond_dict.values()))
-        col_list = ["experiment", "plate_id", "pos", "well_id", "image_id"]
+        col_list = ["experiment", "plate_id", "well", "well_id", "image_id"]
         col_list.extend(iter(self._cond_dict.keys()))
         edited_props_data[col_list] = cond_list
 
@@ -201,9 +202,9 @@ class ImageProperties:
 if __name__ == "__main__":
     @omero_connect
     def feature_extraction_test(conn=None):
-        meta_data = MetaData(948, conn)
+        meta_data = MetaData(1103, conn)
         exp_paths = ExpPaths(meta_data)
-        well = conn.getObject("Well", 10636)
+        well = conn.getObject("Well", 12482)
         omero_image = well.getImage(0)
         flatfield_dict = flatfieldcorr(well, meta_data, exp_paths)
         image = Image(well, omero_image, meta_data, exp_paths, flatfield_dict)
