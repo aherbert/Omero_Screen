@@ -2,7 +2,9 @@
 
 current version 0.1.1
 
-This is a beta version of the program; additional bug fixes and testing necessary
+Our lab uses this program for cell cycle analysis in high content screening format
+using data on our omero server.
+Additional bug fixes and testing necessary!
 Requires a connection to an active Omero server
 
 
