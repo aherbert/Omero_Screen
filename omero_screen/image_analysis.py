@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from omero_screen import Defaults
 from omero_screen.data_structure import Defaults, MetaData, ExpPaths
 from omero_screen.flatfield_corr import flatfieldcorr

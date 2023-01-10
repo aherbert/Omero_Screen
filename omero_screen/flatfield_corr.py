@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from omero_screen.aggregator import ImageAggregator
 from omero_screen.general_functions import save_fig, scale_img, generate_image, generate_random_image, \
     omero_connect

@@ -1,4 +1,4 @@
-from omero_screen import SEPARATOR
+from omero_screen import Defaults,SEPARATOR 
 from omero_screen.image_analysis import Image, ImageProperties
 import tqdm
 import pandas as pd
@@ -11,6 +11,7 @@ import pathlib
 
 def well_loop(well, meta_data, exp_paths, flatfield_dict):
     well_pos = well_pos = f"row_{well.row}_col{well.column}"
+
     df_well_path = exp_paths.temp_well_data / f'{well_pos}_df_well'
     df_well_quality_path = exp_paths.temp_well_data / f'{well_pos}_df_well_quality'
     # check if file already exists to load dfs and move on
