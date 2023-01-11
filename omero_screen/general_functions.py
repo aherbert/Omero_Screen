@@ -54,7 +54,7 @@ def omero_connect(func):
                 value = func(*args, **kwargs, conn=conn)
                 print('Disconnecting from Omero')
             else:
-                print('Failed to connect to Omero: %s' % conn.getLastError())
+                print(f'Failed to connect to Omero: {conn.getLastError()}')
         finally:
             # No side effects if called without a connection
             conn.close()

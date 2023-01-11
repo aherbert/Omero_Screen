@@ -6,6 +6,7 @@ from omero_screen import main
 PLATE_ID = None
 
 if __name__ == '__main__':
+
     if not PLATE_ID:
         PLATE_ID = input("Provide the PlateID: ")
     omero_screen.main.main(PLATE_ID)

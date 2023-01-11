@@ -57,10 +57,10 @@ class Image:
 
     def _n_segmentation(self):
         """perform cellpose segmentation using nuclear mask """
-        model = models.CellposeModel(gpu=False, model_type='nuclei')
+        model = models.CellposeModel(gpu=False, model_type=Defaults.MODEL_DICT['nuclei'])
       
         n_channels = [[0, 0]]
-        n_mask_array, n_flows, n_styles = model.eval(Defaults.MODEL_DICT['nuclei'], channels=n_channels)
+        n_mask_array, n_flows, n_styles = model.eval(self.img_dict['DAPI'], channels=n_channels)
         # return cleaned up mask using filter function
         return filter_segmentation(n_mask_array)
 
