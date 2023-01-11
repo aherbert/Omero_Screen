@@ -60,7 +60,7 @@ class Image:
         model = models.CellposeModel(gpu=False, model_type='nuclei')
       
         n_channels = [[0, 0]]
-        n_mask_array, n_flows, n_styles = model.eval(self.img_dict['DAPI'], diameter=11.1, flow_threshold=0.4, channels=n_channels)
+        n_mask_array, n_flows, n_styles = model.eval(Defaults.MODEL_DICT['nuclei'], channels=n_channels)
         # return cleaned up mask using filter function
         return filter_segmentation(n_mask_array)
 
