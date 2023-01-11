@@ -130,7 +130,7 @@ def filter_segmentation(mask: np.ndarray) -> np.ndarray:
     """
     cleared = clear_border(mask)
     sizes = np.bincount(cleared.ravel())
-    mask_sizes = (sizes > 80) & (sizes < 4000)
+    mask_sizes = (sizes > 10)
     mask_sizes[0] = 0
     cells_cleaned = mask_sizes[cleared]
     return cells_cleaned * mask

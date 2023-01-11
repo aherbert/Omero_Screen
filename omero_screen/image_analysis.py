@@ -42,13 +42,9 @@ class Image:
     def _get_img_dict(self):
         """divide image_array with flatfield correction mask and return dictionary "channel_name": corrected image"""
         img_dict = {}
-        for channel in list(
-                self.channels.items()):  # produces a tuple of channel key value pair (ie ('DAPI':0)
+        for channel in list(self.channels.items()):  # produces a tuple of channel key value pair (ie ('DAPI':0)
             corr_img = generate_image(self.omero_image, channel[1]) / self._flatfield_dict[channel[0]]
-            corr_img = corr_img[30:1050, 30:1050]
-            bg_corr_img = corr_img - np.median(corr_img)
-            bg_corr_img[np.where(bg_corr_img <= 100)] = 100
-            img_dict[channel[0]] = bg_corr_img  # using channel key here to link each image with its channel
+            img_dict[channel[0]] = corr_img[30:1050, 30:1050]  # using channel key here to link each image with its channel
         return img_dict
 
     def _get_models(self):
@@ -61,16 +57,17 @@ class Image:
 
     def _n_segmentation(self):
         """perform cellpose segmentation using nuclear mask """
-        model = models.CellposeModel(gpu=False, model_type=Defaults.MODEL_DICT['nuclei'])
+        model = models.CellposeModel(gpu=False, model_type='nuclei')
+      
         n_channels = [[0, 0]]
-        n_mask_array, n_flows, n_styles = model.eval(self.img_dict['DAPI'], channels=n_channels)
+        n_mask_array, n_flows, n_styles = model.eval(self.img_dict['DAPI'], diameter=11.1, flow_threshold=0.4, channels=n_channels)
         # return cleaned up mask using filter function
         return filter_segmentation(n_mask_array)
 
     def _c_segmentation(self):
         """perform cellpose segmentation using cell mask """
         model = models.CellposeModel(gpu=False, model_type=self._get_models())
-        c_channels = [[0, 1]]
+        c_channels = [[2, 1]]
         # combine the 2 channel numpy array for cell segmentation with the nuclei channel
         comb_image = np.dstack([self.img_dict['DAPI'], self.img_dict['Tub']])
         c_masks_array, c_flows, c_styles = model.eval(comb_image, channels=c_channels)
@@ -203,9 +200,9 @@ class ImageProperties:
 if __name__ == "__main__":
     @omero_connect
     def feature_extraction_test(conn=None):
-        meta_data = MetaData(1103, conn)
+        meta_data = MetaData(1107, conn)
         exp_paths = ExpPaths(meta_data)
-        well = conn.getObject("Well", 12482)
+        well = conn.getObject("Well", 12757)
         omero_image = well.getImage(0)
         flatfield_dict = flatfieldcorr(well, meta_data, exp_paths)
         image = Image(well, omero_image, meta_data, exp_paths, flatfield_dict)
