@@ -58,9 +58,10 @@ class Image:
     def _n_segmentation(self):
         """perform cellpose segmentation using nuclear mask """
         model = models.CellposeModel(gpu=False, model_type=Defaults.MODEL_DICT['nuclei'])
-      
+
         n_channels = [[0, 0]]
         n_mask_array, n_flows, n_styles = model.eval(self.img_dict['DAPI'], channels=n_channels)
+
         # return cleaned up mask using filter function
         return filter_segmentation(n_mask_array)
 
@@ -169,13 +170,12 @@ class ImageProperties:
             self._image.well_pos,
             self._well_id,
             self._image.omero_image.getId(),
-            # self._image.cell_line,
-            # self._image.condition,
             ]
         cond_list.extend(iter(self._cond_dict.values()))
         col_list = ["experiment", "plate_id", "well", "well_id", "image_id"]
         col_list.extend(iter(self._cond_dict.keys()))
-        edited_props_data[col_list] = cond_list
+        col_list_edited = [entry.lower() for entry in col_list]
+        edited_props_data[col_list_edited] = cond_list
 
         return edited_props_data
 
@@ -205,6 +205,7 @@ if __name__ == "__main__":
         well = conn.getObject("Well", 12757)
         omero_image = well.getImage(0)
         flatfield_dict = flatfieldcorr(well, meta_data, exp_paths)
+        print(Image(well, omero_image, meta_data, exp_paths, flatfield_dict))
         image = Image(well, omero_image, meta_data, exp_paths, flatfield_dict)
         image_data = ImageProperties(well, image, meta_data, exp_paths)
         image.segmentation_figure()

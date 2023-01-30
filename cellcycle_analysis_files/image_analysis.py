@@ -1,4 +1,4 @@
-# %% Import libraries
+ # %% Import libraries
 
 import pandas as pd
 import seaborn as sns
@@ -6,7 +6,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from plotnine import *
 import pathlib
-from cell_cycle_distribution_functions import fun_normalise, fun_CellCycle
+from cell_cycle_distribution_functions_old import fun_normalise, fun_CellCycle
 from omero_screen.general_functions import save_fig
 
 # Establishing path to the data and creating a folder to save exported .pdf files

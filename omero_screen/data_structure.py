@@ -36,6 +36,8 @@ class MetaData:
 
         ann = self.plate_obj.getAnnotation(Defaults.NS)
         channels = dict(ann.getValue())
+        if 'Hoechst' in channels:
+            channels['DAPI'] = channels.pop('Hoechst')
         # changing channel number to integer type
         for key in channels:
             channels[key] = int(channels[key])
@@ -63,10 +65,12 @@ class ExpPaths:
         self.quality_ctr = self.path / Defaults.QUALITY_CONTROL
         self.example_img = self.path / Defaults.IMGS_CORR
         self.temp_well_data = self.path / Defaults.TEMP_WELL_DATA
+        self.figures = self.path / Defaults.PLOT_FIGURES
+        self.cellcycle_summary_data=self.path / Defaults.DATA_CELLCYCLE_SUMMARY
 
     def _create_exp_dir(self):
         path_list = [self.path, self.flatfield_templates, self.final_data,
-                     self.quality_ctr, self.example_img, self.temp_well_data]
+                     self.quality_ctr, self.example_img, self.temp_well_data,self.figures,self.cellcycle_summary_data]
         for path in path_list:
             path.mkdir(exist_ok=True)
 
@@ -82,5 +86,6 @@ def test_module(conn=None):
 
 
 if __name__ == "__main__":
-    meta_data = test_module()
+    print( pathlib.Path.home() / Defaults.DEFAULT_DEST_DIR)
+    # meta_data = test_module()
 

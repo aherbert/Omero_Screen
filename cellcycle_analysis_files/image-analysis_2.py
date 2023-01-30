@@ -6,7 +6,7 @@ import seaborn as sns
 import pathlib
 from omero_screen.general_functions import save_fig
 
-from cell_cycle_distribution_functions import fun_normalise, fun_CellCycle
+from cell_cycle_distribution_functions_old import fun_normalise, fun_CellCycle
 
 # Establishing path to the data and creating a folder to save exported .pdf files
 EXP = '221128_DepMap_Exp8_siRNAscreen_Plate1_72hrs'

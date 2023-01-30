@@ -18,6 +18,7 @@ def well_loop(well, meta_data, exp_paths, flatfield_dict):
     if pathlib.Path.exists(df_well_path) and pathlib.Path.exists(df_well_quality_path):
         print(f"\nWell has already been analysed, loading data\n{SEPARATOR}")
         df_well = pd.read_pickle(str(df_well_path))
+        df_well.rename(columns={'Cell_Line': 'cell_line', 'Condition': 'condition'}, inplace=True)
         df_well_quality = pd.read_pickle(str(df_well_quality_path))
     # analyse the images to generate the dfs
     else:

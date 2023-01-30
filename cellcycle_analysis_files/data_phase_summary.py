@@ -49,24 +49,40 @@ def dict_wells_corr(F_dir,conn):
 
 
 def assign_cell_cycle_phase(data, *args):
-    """
-    # %% Selecting parameters of interest and aggregating counts of nuclei and total cellular DAPI signal
-      %% Normalising selected parameters & assigning cell cycle phases
+    """Selecting parameters of interest and aggregating counts of nuclei and total cellular DAPI signal
+    and normalising selected parameters & assigning cell cycle phases
 
-    :param data:A data frame that including the necessary parameters
-    :param args:interesting parameters used for group data frame to aggregating counts of nuclei and total cellular DAPI signal
+    :param data:Dataframe,
+    :param args:interesting parameters used for group data to aggregating counts of nuclei and total cellular DAPI signal
     :return: data_IF (A dataframe assigned a cell cycle phase to each cell), data_thresholds (threshold values of normalised integrated DAPI intensities)
     """
+    data_IF = data.groupby(["experiment", "plate_id", "well", "well_id", "image_id",
+                                "cell_line", "condition", "Cyto_ID", "cell_id", "area_cell",
 
+    "intensity_mean_EdU_cyto"]).agg(
+
+        nuclei_count=("label", "count"),
+        area_nucleus=("area_nucleus", "sum"),
+        DAPI_total=("integrated_int_DAPI", "sum"),
+        EdU_mean=("intensity_mean_EdU_nucleus", "mean"))
+        #H3P_mean=("intensity_mean_H3P_nucleus", "mean")).reset_index()
+
+    # !!! Correct nuclear EdU and H3P intensities using respective cytoplasmic intensities
+
+    data_IF["EdU_mean_corr_norm"] = data_IF["EdU_mean"] / data_IF["intensity_mean_EdU_cyto"]
+    #data_IF["H3P_mean_corr"] = data_IF["H3P_mean"] / data_IF["intensity_mean_H3P_cyto"]
+    data_IF["Condition"] = data_IF["Condition"].astype(str)
     data_IF = data.groupby(list(args)).agg(
     nuclei_count=("label", "count"),
     nucleus_area=("area_nucleus", "sum"),
     DAPI_total=("integrated_int_DAPI", "sum")).reset_index()
-    data_IF["Condition"] = data_IF["Condition"].astype(str)
+    data_IF["condition"] = data_IF["condition"].astype(str)
 
-    data_IF = fun_normalise(data=data_IF, values=["DAPI_total", "intensity_mean_EdU_cell", "intensity_mean_H3P_cell",
-                                                  "area_cell"])
-    data_IF, data_thresholds = fun_CellCycle(data=data_IF, ctr_col="Condition", ctr_cond="NT")
+    data_IF = fun_normalise(data=data_IF,
+                            values=["DAPI_total", "EdU_mean_corr_norm", "H3P_mean_corr", "area_cell", "area_nucleus"])
+
+    # !!! Specify DAPI, EdU and H3P columns (use normalised corrected values for EdU and H3P)
+    data_IF, data_thresholds = fun_CellCycle(data=data_IF, DAPI_col="DAPI_total_norm", EdU_col="EdU_mean_corr_norm")
     return data_IF, data_thresholds
 
 def cell_cycle_summary(data_dir,conn):
@@ -77,19 +93,18 @@ def cell_cycle_summary(data_dir,conn):
     :return: A dataframe summarized each cell cycle phase
     """
     data_IF, data_thresholds = assign_cell_cycle_phase(dict_wells_corr(data_dir, conn),"experiment", "plate_id", "well_id", "image_id",
-                            "Cell_Line", "Condition", "Cyto_ID", "cell_id", "area_cell",
-                            "intensity_mean_EdU_cell",
-                            "intensity_mean_H3P_cell")
+                            "cell_line", "condition", "Cyto_ID", "cell_id", "area_cell",
+                            "EdU_mean_corr_norm")
     data_cell_cycle = pd.DataFrame()
     for experiment in data_IF["experiment"].unique():
-        for cell_line in data_IF.loc[data_IF["experiment"] == experiment]["Cell_Line"].unique():
+        for cell_line in data_IF.loc[data_IF["experiment"] == experiment]["cell_line"].unique():
             for condition in data_IF.loc[(data_IF["experiment"] == experiment) &
-                                             (data_IF["Cell_Line"] == cell_line)]["Condition"].unique():
-                tmp_data = data_IF.loc[(data_IF["experiment"] == experiment) &(data_IF["Cell_Line"] == cell_line) &
-                                             (data_IF["Condition"] == condition)]
+                                             (data_IF["cell_line"] == cell_line)]["condition"].unique():
+                tmp_data = data_IF.loc[(data_IF["experiment"] == experiment) &(data_IF["cell_line"] == cell_line) &
+                                             (data_IF["condition"] == condition)]
                 n = len(tmp_data)
 
-                tmp_data = tmp_data.groupby(["experiment", "plate_id", "Cell_Line", "Condition", "cell_cycle"],
+                tmp_data = tmp_data.groupby(["experiment", "plate_id", "cell_line", "condition", "cell_cycle"],
                                                 as_index=False).agg(
                         count=("cell_id", "count"),
                         nuclear_area_mean=("nucleus_area", "mean"),
@@ -99,7 +114,7 @@ def cell_cycle_summary(data_dir,conn):
             tmp_data["n"] = n
             tmp_data["percentage"] = (tmp_data["count"] / tmp_data["n"]) * 100
             data_cell_cycle = pd.concat([data_cell_cycle, tmp_data])
-    return data_cell_cycle.groupby(["Cell_Line", "cell_cycle", "Condition"], as_index=False).agg(percentage_mean=("percentage", "mean"), percentage_sd=("percentage", "std"))
+    return data_cell_cycle.groupby(["cell_line", "cell_cycle", "condition"], as_index=False).agg(percentage_mean=("percentage", "mean"), percentage_sd=("percentage", "std"))
 
 
 def save_folder(Path_data,exist_ok=True):
@@ -109,17 +124,19 @@ def save_folder(Path_data,exist_ok=True):
     :return: This method does not return any value.
     """
     # path_data = "/Users/Lab/Desktop/CDK1ArrestCheck_20hr_1/"
-    path_export = Path_data+ "/Figures/"
+    path_export_figure = Path_data+ "/Figures/"
+    path_export_cellcycle_summary = Path_data + "/cellcycle_summary/"
     if exist_ok==True:
-        os.makedirs(path_export, exist_ok=True)
+        os.makedirs(path_export_figure, exist_ok=True)
+        os.makedirs(path_export_cellcycle_summary, exist_ok=True)
     else:
-        isExist = os.path.exists(path_export)
+        isExist = os.path.exists(path_export_figure)
         try:
             if isExist==False:
-                os.makedirs(path_export)
+                os.makedirs(path_export_figure)
         except FileExistsError:
             print('File already exists')
-    return path_export
+    return path_export_figure,path_export_cellcycle_summary
 
 
 
@@ -128,13 +145,10 @@ if __name__ == '__main__':
 
     conn = BlitzGateway('hy274', 'omeroreset', host='ome2.hpc.susx.ac.uk')
     conn.connect()
-    df = cell_cycle_summary('/Users/hh65/Desktop/221128_DepMap_Exp8_siRNAscreen_Plate1_72hrs/',conn=conn)
+
+    df = cell_cycle_summary('/Users/haoranyue/Desktop/221102_CellCycleProfile_Exp5_inhibitors_RPE1cdk1as/',conn=conn)
     # df=dict_wells_corr(F_dir='/Users/hh65/Desktop/221128_DepMap_Exp8_siRNAscreen_Plate1_72hrs/',conn=conn)
-    #
-    # df_2=assign_cell_cycle_phase(df,"experiment", "plate_id", "well_id", "image_id",
-    # #                         "Cell_Line", "Condition", "Cyto_ID", "cell_id", "area_cell",
-    # #                         "intensity_mean_EdU_cell",
-    # #                         "intensity_mean_H3P_cell")
+    conn.close()
     df.to_csv('~/Desktop/test.csv')
 
 

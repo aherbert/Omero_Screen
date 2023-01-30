@@ -57,7 +57,9 @@ def omero_connect(func):
                 print(f'Failed to connect to Omero: {conn.getLastError()}')
         finally:
             # No side effects if called without a connection
+
             conn.close()
+
         return value
 
     return wrapper_omero_connect
