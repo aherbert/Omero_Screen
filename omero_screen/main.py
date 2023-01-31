@@ -15,7 +15,10 @@ def main(plate_id, conn=None):
     df_quality_control = pd.DataFrame()
     for count, well in enumerate(list(meta_data.plate_obj.listChildren())):
         ann = well.getAnnotation(Defaults.NS)
-        cell_line = dict(ann.getValue())['cell_line']
+        try:
+            cell_line = dict(ann.getValue())['cell_line']
+        except KeyError:
+            cell_line = dict(ann.getValue())['Cell_Line']
         if cell_line != 'Empty':
             print(f"\n{SEPARATOR} \nAnalysing well row:{well.row}/col:{well.column} - {count + 1} of {meta_data.plate_length}.\n{SEPARATOR}")
             flatfield_dict = flatfieldcorr(well, meta_data, exp_paths)

@@ -34,7 +34,12 @@ class Image:
 
     def _get_metadata(self):
         self.channels = self._meta_data.channels
-        self.cell_line = self._meta_data.well_conditions(self._well.getId())['cell_line']
+        try:
+            self.cell_line = self._meta_data.well_conditions(self._well.getId())['cell_line']
+        except KeyError:
+            self.cell_line = self._meta_data.well_conditions(self._well.getId())['Cell_Line']
+
+
         # self.condition = self._meta_data.well_conditions(self._well.getId())['condition']
         row_list = list('ABCDEFGHIJKL')
         self.well_pos = f"{row_list[self._well.row]}{self._well.column}"
