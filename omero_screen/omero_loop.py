@@ -1,5 +1,6 @@
 from omero_screen import Defaults,SEPARATOR 
 from omero_screen.image_analysis import Image, ImageProperties
+from omero_screen.image_analysis_nucleus import NucImage, NucImageProperties
 import tqdm
 import pandas as pd
 import pathlib
@@ -9,7 +10,7 @@ import pathlib
 
 # Functions to loop through well object, assemble data for images and ave quality control data
 
-def well_loop(well, meta_data, exp_paths, flatfield_dict):
+def well_loop(well, meta_data, exp_paths, flatfield_dict, stardist_model):
     well_pos = well_pos = f"row_{well.row}_col{well.column}"
 
     df_well_path = exp_paths.temp_well_data / f'{well_pos}_df_well'
@@ -28,8 +29,12 @@ def well_loop(well, meta_data, exp_paths, flatfield_dict):
         image_number = len(list(well.listChildren()))
         for number in tqdm.tqdm(range(image_number)):
             omero_img = well.getImage(number)
-            image = Image(well, omero_img, meta_data, exp_paths, flatfield_dict)
-            image_data = ImageProperties(well, image, meta_data, exp_paths)
+            if 'Tub' in meta_data.channels.keys():
+                image = Image(well, omero_img, meta_data, exp_paths, flatfield_dict)
+                image_data = ImageProperties(well, image, meta_data, exp_paths)
+            else:
+                image = NucImage(well, omero_img, meta_data, exp_paths, flatfield_dict, stardist_model)
+                image_data = NucImageProperties(well, image, meta_data, exp_paths)
             if number == 1:
                 image.segmentation_figure()
                 image.save_example_tiff()

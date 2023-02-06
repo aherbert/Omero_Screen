@@ -4,11 +4,13 @@ from omero_screen.data_structure import MetaData, ExpPaths
 from omero_screen.flatfield_corr import flatfieldcorr
 from omero_screen.omero_loop import well_loop
 from cellcycle_analysis import cellcycle_analysis
+from stardist.models import StarDist2D
 import pandas as pd
 
 
 @omero_connect
 def main(plate_id, conn=None):
+    stardist_model = StarDist2D.from_pretrained('2D_versatile_fluo')
     meta_data = MetaData(plate_id, conn)
     exp_paths = ExpPaths(meta_data)
     df_final = pd.DataFrame()
@@ -22,7 +24,7 @@ def main(plate_id, conn=None):
         if cell_line != 'Empty':
             print(f"\n{SEPARATOR} \nAnalysing well row:{well.row}/col:{well.column} - {count + 1} of {meta_data.plate_length}.\n{SEPARATOR}")
             flatfield_dict = flatfieldcorr(well, meta_data, exp_paths)
-            well_data, well_quality = well_loop(well, meta_data, exp_paths, flatfield_dict)
+            well_data, well_quality = well_loop(well, meta_data, exp_paths, flatfield_dict, stardist_model)
             df_final = pd.concat([df_final, well_data])
             df_quality_control = pd.concat([df_quality_control, well_quality])
     df_final = pd.concat([df_final.loc[:, 'experiment':], df_final.loc[:, :'experiment']], axis=1).iloc[:, :-1]
