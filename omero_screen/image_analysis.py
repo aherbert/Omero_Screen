@@ -5,12 +5,17 @@ from omero_screen.flatfield_corr import flatfieldcorr
 from omero_screen.general_functions import save_fig, generate_image, filter_segmentation, omero_connect, scale_img, \
     color_label
 
-from cellpose import models
+
 from skimage import measure, io
+from skimage.morphology import white_tophat, disk
 import pandas as pd
 import numpy as np
-
 import matplotlib.pyplot as plt
+
+import torch
+from cellpose import models
+
+
 
 
 
@@ -49,7 +54,7 @@ class Image:
         img_dict = {}
         for channel in list(self.channels.items()):  # produces a tuple of channel key value pair (ie ('DAPI':0)
             corr_img = generate_image(self.omero_image, channel[1]) / self._flatfield_dict[channel[0]]
-            img_dict[channel[0]] = corr_img[30:1050, 30:1050]  # using channel key here to link each image with its channel
+            img_dict[channel[0]] = corr_img  # using channel key here to link each image with its channel
         return img_dict
 
     def _get_models(self):
@@ -62,21 +67,28 @@ class Image:
 
     def _n_segmentation(self):
         """perform cellpose segmentation using nuclear mask """
-        model = models.CellposeModel(gpu=False, model_type=Defaults.MODEL_DICT['nuclei'])
+        if torch.cuda.is_available():
+            segmentation_model = models.CellposeModel(gpu=True, model_type=Defaults.MODEL_DICT['nuclei'])
+        else:
+            segmentation_model = models.CellposeModel(gpu=False, model_type=Defaults.MODEL_DICT['nuclei'])
+
 
         n_channels = [[0, 0]]
-        n_mask_array, n_flows, n_styles = model.eval(self.img_dict['DAPI'], channels=n_channels)
+        n_mask_array, n_flows, n_styles = segmentation_model.eval(self.img_dict['DAPI'], channels=n_channels)
 
         # return cleaned up mask using filter function
         return filter_segmentation(n_mask_array)
 
     def _c_segmentation(self):
         """perform cellpose segmentation using cell mask """
-        model = models.CellposeModel(gpu=False, model_type=self._get_models())
+        if torch.cuda.is_available():
+            segmentation_model = models.CellposeModel(gpu=True, model_type=self._get_models())
+        else:
+            segmentation_model = models.CellposeModel(gpu=False, model_type=self._get_models())
         c_channels = [[2, 1]]
         # combine the 2 channel numpy array for cell segmentation with the nuclei channel
         comb_image = np.dstack([self.img_dict['DAPI'], self.img_dict['Tub']])
-        c_masks_array, c_flows, c_styles = model.eval(comb_image, channels=c_channels)
+        c_masks_array, c_flows, c_styles = segmentation_model.eval(comb_image, channels=c_channels)
         # return cleaned up mask using filter function
         return filter_segmentation(c_masks_array)
 
