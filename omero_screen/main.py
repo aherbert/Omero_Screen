@@ -3,7 +3,7 @@ from omero_screen.general_functions import omero_connect
 from omero_screen.data_structure import MetaData, ExpPaths
 from omero_screen.flatfield_corr import flatfieldcorr
 from omero_screen.omero_loop import well_loop
-from cellcycle_analysis import cellcycle_analysis
+from omero_screen.cellcycle_analysis import cellcycle_analysis
 from stardist.models import StarDist2D
 import pandas as pd
 import torch
