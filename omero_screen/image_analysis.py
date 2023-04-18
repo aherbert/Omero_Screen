@@ -54,7 +54,8 @@ class Image:
         img_dict = {}
         for channel in list(self.channels.items()):  # produces a tuple of channel key value pair (ie ('DAPI':0)
             corr_img = generate_image(self.omero_image, channel[1]) / self._flatfield_dict[channel[0]]
-            img_dict[channel[0]] = corr_img  # using channel key here to link each image with its channel
+            bgcorr_img = corr_img - np.percentile(corr_img, 0.1) +1
+            img_dict[channel[0]] = bgcorr_img  # using channel key here to link each image with its channel
         return img_dict
 
     def _get_models(self):
