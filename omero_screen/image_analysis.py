@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from omero_screen import Defaults
 from omero_screen.data_structure import Defaults, MetaData, ExpPaths
 from omero_screen.flatfield_corr import flatfieldcorr
 from omero_screen.general_functions import save_fig, generate_image, filter_segmentation, omero_connect, scale_img, \
@@ -7,11 +6,9 @@ from omero_screen.general_functions import save_fig, generate_image, filter_segm
 
 
 from skimage import measure, io
-from skimage.morphology import white_tophat, disk
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
 import torch
 from cellpose import models
 

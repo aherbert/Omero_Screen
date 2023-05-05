@@ -1,91 +1,39 @@
-#!/usr/bin/env python
-"""Module to organise the experiment data
-
-Reads data from excel_path and stores them
-
-"""
-
+from omero_screen import SEPARATOR
+from omero_screen.image_analysis import Image, ImageProperties
+import tqdm
 import pandas as pd
 import pathlib
-from omero_screen import Defaults, SEPARATOR
-from omero_screen.general_functions import omero_connect
 
 
 
 
+# Functions to loop through well object, assemble data for images and ave quality control data
 
-class MetaData:
-    """ Extract experiment info from Excel, Plate Name from Omero.
-     Class Attributes, Various Plate MetaData (Plate_ID,
-     Class Methods Extract Well specific information
-     """
+def well_loop(well, meta_data, exp_paths, flatfield_dict):
+    well_pos = f"row_{well.row}_col{well.column}"
 
-    def __init__(self, plate_id, conn):
-        self.conn = conn
-        self.plate_obj = self.conn.getObject("Plate", plate_id)
-        self.plate = self.plate_obj.getName()
-        self._extract_meta_data()
-        self.df_final = pd.DataFrame()
-        self.df_quality = pd.DataFrame()
-
-    def _extract_meta_data(self):
-        """Read Tabs from Excel and stor as class properties
-        Attributes: plate_id (int), channels (dict), plate_layout (df), segmentation models (paths)
-
-        """
-
-        ann = self.plate_obj.getAnnotation(Defaults.NS)
-        channels = dict(ann.getValue())
-        if 'Hoechst' in channels:
-            channels['DAPI'] = channels.pop('Hoechst')
-        # changing channel number to integer type
-        for key in channels:
-            channels[key] = int(channels[key])
-        self.channels = channels
-        self.plate_length = len(list(self.plate_obj.listChildren()))
-
-    def well_conditions(self, current_well):
-        well = self.conn.getObject("Well", current_well)
-        ann = well.getAnnotation(Defaults.NS)
-        return dict(ann.getValue())
-
-
-
-class ExpPaths:
-    def __init__(self, meta_data: MetaData):
-        self.meta_data = meta_data
-        self._create_dir_paths()
-        self._create_exp_dir()
-
-    def _create_dir_paths(self):
-        """ Generate path attributes for experiment"""
-        self.path = pathlib.Path.home() / Defaults.DEFAULT_DEST_DIR / f"{self.meta_data.plate}"
-        self.flatfield_templates = self.path / Defaults.FLATFIELD_TEMPLATES
-        self.final_data = self.path / Defaults.DATA
-        self.quality_ctr = self.path / Defaults.QUALITY_CONTROL
-        self.example_img = self.path / Defaults.IMGS_CORR
-        self.temp_well_data = self.path / Defaults.TEMP_WELL_DATA
-        self.figures = self.path / Defaults.PLOT_FIGURES
-        self.cellcycle_summary_data=self.path / Defaults.DATA_CELLCYCLE_SUMMARY
-
-    def _create_exp_dir(self):
-        path_list = [self.path, self.flatfield_templates, self.final_data,
-                     self.quality_ctr, self.example_img, self.temp_well_data,self.figures,self.cellcycle_summary_data]
-        for path in path_list:
-            path.mkdir(exist_ok=True)
-
-        print(f'Gathering data and assembling directories for experiment {self.meta_data.plate}\n{SEPARATOR}')
-
-@omero_connect
-def test_module(conn=None):
-    meta_data = MetaData(1107, conn)
-    paths = ExpPaths(meta_data)
-    print(meta_data.well_conditions(12760)['cell_line'])
-    print(meta_data.channels)
-
-
-
-if __name__ == "__main__":
-    print( pathlib.Path.home() / Defaults.DEFAULT_DEST_DIR)
-    # meta_data = test_module()
-
+    df_well_path = exp_paths.temp_well_data / f'{well_pos}_df_well'
+    df_well_quality_path = exp_paths.temp_well_data / f'{well_pos}_df_well_quality'
+    # check if file already exists to load dfs and move on
+    if pathlib.Path.exists(df_well_path) and pathlib.Path.exists(df_well_quality_path):
+        print(f"\nWell has already been analysed, loading data\n{SEPARATOR}")
+        df_well = pd.read_pickle(str(df_well_path))
+        df_well.rename(columns={'Cell_Line': 'cell_line', 'Condition': 'condition'}, inplace=True)
+        df_well_quality = pd.read_pickle(str(df_well_quality_path))
+    # analyse the images to generate the dfs
+    else:
+        print(f"\nSegmenting and Analysing Images\n{SEPARATOR}")
+        df_well = pd.DataFrame()
+        df_well_quality = pd.DataFrame()
+        image_number = len(list(well.listChildren()))
+        for number in tqdm.tqdm(range(image_number)):
+            omero_img = well.getImage(number)
+            image = Image(well, omero_img, meta_data, exp_paths, flatfield_dict)
+            image_data = ImageProperties(well, image, meta_data, exp_paths)
+            df_image = image_data.image_df
+            df_image_quality = image_data.quality_df
+            df_well = pd.concat([df_well, df_image])
+            df_well_quality = pd.concat([df_well_quality, df_image_quality])
+            df_well.to_pickle(str(df_well_path))
+            df_well_quality.to_pickle(str(df_well_quality_path))
+    return df_well, df_well_quality
