@@ -8,7 +8,12 @@ import torch
 
 
 @omero_connect
-def main(plate_id, conn=None):
+def main(plate_id, option, conn=None):
+
+    for key in option:
+        if key in Defaults:
+            Defaults[key] = option[key]
+
 
     meta_data = MetaData(plate_id, conn)
     exp_paths = ExpPaths(meta_data)
@@ -21,7 +26,7 @@ def main(plate_id, conn=None):
     df_final = pd.DataFrame()
     df_quality_control = pd.DataFrame()
     for count, well in enumerate(list(meta_data.plate_obj.listChildren())):
-        ann = well.getAnnotation(Defaults.NS)
+        ann = well.getAnnotation(Defaults['NS'])
         try:
             cell_line = dict(ann.getValue())['cell_line']
         except KeyError:

@@ -61,14 +61,14 @@ class Image:
         :param number: int 0 or 1, 0 for nuclei model, 1 for cell model
         :return: path to model (str)
         """
-        return Defaults.MODEL_DICT[self.cell_line.replace(" ", "").upper()]
+        return Defaults['MODEL_DICT'][self.cell_line.replace(" ", "").upper()]
 
     def _n_segmentation(self):
         """perform cellpose segmentation using nuclear mask """
         if torch.cuda.is_available():
-            segmentation_model = models.CellposeModel(gpu=True, model_type=Defaults.MODEL_DICT['nuclei'])
+            segmentation_model = models.CellposeModel(gpu=True, model_type=Defaults['MODEL_DICT']['nuclei'])
         else:
-            segmentation_model = models.CellposeModel(gpu=False, model_type=Defaults.MODEL_DICT['nuclei'])
+            segmentation_model = models.CellposeModel(gpu=False, model_type=Defaults['MODEL_DICT']['nuclei'])
 
 
         n_channels = [[0, 0]]
@@ -128,7 +128,7 @@ class ImageProperties:
 
     def __init__(self, well, image_obj, meta_data, exp_paths, featurelist=None):
         if featurelist is None:
-            featurelist = Defaults.FEATURELIST
+            featurelist = Defaults['FEATURELIST']
         self._meta_data = meta_data
         self.plate_name = meta_data.plate
         self._well = well

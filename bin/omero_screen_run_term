@@ -14,4 +14,4 @@ PLATE_ID = None
 if __name__ == '__main__':
 
 
-    omero_screen.main.main(args.ID)
+    omero_screen.main.main(args.ID, option={})

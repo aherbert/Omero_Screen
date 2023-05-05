@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 from omero_screen.aggregator import ImageAggregator
+
 from omero_screen.general_functions import save_fig, scale_img, generate_image, generate_random_image, \
     omero_connect
 from omero_screen.data_structure import MetaData, ExpPaths
-from omero_screen import SEPARATOR
+from omero_screen import Defaults, SEPARATOR
 from skimage import io
 import matplotlib.pyplot as plt
 import numpy as np
@@ -52,7 +53,8 @@ def generate_corr_dict(well, well_pos, channels, template_subfolder_path):
     for channel in tqdm(list(channels.items())):
         corr_img_id = f"{well_pos}_{channel[0]}"
         norm_mask = aggregate_imgs(well, channel)
-        io.imsave(template_subfolder_path / f"{corr_img_id}_flatfield_masks.tif", norm_mask)
+        if Defaults['DEBUG']:
+            io.imsave(template_subfolder_path / f"{corr_img_id}_flatfield_masks.tif", norm_mask)
         example = gen_example(well, channel, norm_mask)
         example_fig(example, well_pos, channel, template_subfolder_path)
         corr_dict[channel[0]] = norm_mask  # associates channel name with flatfield mask
@@ -95,7 +97,7 @@ def example_fig(data_list, well_pos, channel, path):
             plt.imshow(data_tuple[0], cmap='gray')
         else:
             plt.plot(data_tuple[0])
-            plt.ylim(data_tuple[0].min(), 10 * data_tuple[0].min())
+            plt.ylim(0, 10 * data_tuple[0].min())
         plt.title(data_tuple[1])
     # save and close figure
     fig_id = f"{well_pos}_{channel[0]}_flatfield_check"  # using channel name
