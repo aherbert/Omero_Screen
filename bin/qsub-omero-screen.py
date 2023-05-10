@@ -12,7 +12,7 @@ def create_job_script(args):
   omero_screen = 'Omero_Screen'
   omero_screen_prog = 'omero_screen_run_term'
   conda_module = 'Anaconda3/2022.05'
-  send_mail = './send_mail.py'
+  send_mail = './send-mail.py'
 
   if not os.path.isfile(omero_screen_prog):
     raise Exception(f'Missing program: {omero_screen_prog}')
