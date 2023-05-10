@@ -59,7 +59,7 @@ class ExpPaths:
 
     def _create_dir_paths(self):
         """ Generate path attributes for experiment"""
-        self.path = Defaults['DEFAULT_DEST_DIR'] / f"{self.meta_data.plate}"
+        self.path = pathlib.Path(Defaults['DEFAULT_DEST_DIR']) / f"{self.meta_data.plate}"
         self.flatfield_templates = self.path / Defaults['FLATFIELD_TEMPLATES']
         self.final_data = self.path / Defaults['DATA']
         self.temp_well_data = self.path / Defaults['TEMP_WELL_DATA']
