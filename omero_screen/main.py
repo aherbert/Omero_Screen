@@ -8,12 +8,9 @@ import torch
 
 
 @omero_connect
-def main(plate_id, option, conn=None):
-
-    for key in option:
-        if key in Defaults:
-            Defaults[key] = option[key]
-
+def main(plate_id, options=None, conn=None):
+    if dict:
+        Defaults.update(options)
 
     meta_data = MetaData(plate_id, conn)
     exp_paths = ExpPaths(meta_data)
