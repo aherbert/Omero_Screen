@@ -6,6 +6,7 @@ __version__ = '0.1.1'
 import pathlib
 Defaults = {
 'DEFAULT_DEST_DIR': pathlib.Path.home() / "Desktop",  # Decides where the final data folder will be made
+'DEFAULT_SUMMARY_FILE': 'screen-dir',  # Record the result directory for the screen
 'FLATFIELD_TEMPLATES': "flatfield_correction_images",
 'DATA': "single_cell_data",
 'QUALITY_CONTROL': "quality_control",

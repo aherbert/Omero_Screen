@@ -41,9 +41,9 @@ def create_job_script(args):
   name = 'omero_screen'[0:name_width] + '.' + str(pid)
 
   # Results file to record directory names for screen results
-  results_file = f'{results_dir}/screen-dir.{name}'
-  if os.path.isfile(results_file):
-    raise Exception(f'Results file exists: {results_file}')
+  results_file = f'screen-dir.{name}'
+  if os.path.isfile(f'{results_dir}/{results_file}'):
+    raise Exception(f'Results file exists: {results_dir}/{results_file}')
   open(results_file, 'w').close()
 
   # Create the job file
@@ -97,7 +97,7 @@ def create_job_script(args):
     # Note: using mailx on the HPC is flakey (either delayed or fails).
     # Here we use a custom python script which sends immediately.
     subject = f'Job results: {name}'
-    msg = f'rsync -a --files-from=:{results_file} {args.username}'\
+    msg = f'rsync -a --files-from=:{results_dir}/{results_file} {args.username}'\
           f'@apollo2.hpc.susx.ac.uk:{results_dir} .'
     #print(f'echo \'{msg}\' | mailx -s \'{subject}\' '\
     #  f'{args.username}@sussex.ac.uk', file=f)
