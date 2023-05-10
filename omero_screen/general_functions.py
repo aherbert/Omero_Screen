@@ -1,4 +1,3 @@
-import pandas as pd
 from omero.gateway import BlitzGateway
 import pathlib
 import numpy as np
@@ -83,13 +82,13 @@ def time_it(func):
     return wrapper_time_it
 
 
-def scale_img(img: np.array, percentile: tuple[float, float] = (1, 99)) -> np.array:
+def scale_img(img: np.array, percentile: tuple = (1, 99)) -> np.array:
     """Increase contrast by scaling image to exclude lowest and highest intensities"""
     percentiles = np.percentile(img, (percentile[0], percentile[1]))
     return exposure.rescale_intensity(img, in_range=tuple(percentiles))
 
 
-def generate_image(image: 'Omero image object', channel: int) -> np.ndarray:
+def generate_image(image: str, channel: int) -> np.ndarray:
     """
     Turn Omero Image Object from Well into numpy nd-array that is returned
 
@@ -100,7 +99,7 @@ def generate_image(image: 'Omero image object', channel: int) -> np.ndarray:
     return pixels.getPlane(0, channel, 0)  # using channel number
 
 
-def generate_random_image(well: 'Omero well Object', channel: dict) -> np.ndarray:
+def generate_random_image(well: str, channel: dict) -> np.ndarray:
     """
     Choose random image from well and feed to generate image function
 
