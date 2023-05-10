@@ -97,7 +97,7 @@ def create_job_script(args):
     # Note: using mailx on the HPC is flakey (either delayed or fails).
     # Here we use a custom python script which sends immediately.
     subject = f'Job results: {name}'
-    msg = f'rsync -a --files-from={results_file} {args.username}'\
+    msg = f'rsync -a --files-from=:{results_file} {args.username}'\
           f'@apollo2.hpc.susx.ac.uk:{results_dir} .'
     #print(f'echo \'{msg}\' | mailx -s \'{subject}\' '\
     #  f'{args.username}@sussex.ac.uk', file=f)
