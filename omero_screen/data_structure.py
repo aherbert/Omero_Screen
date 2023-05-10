@@ -82,6 +82,6 @@ def test_module(conn=None):
 
 
 if __name__ == "__main__":
-    print( pathlib.Path.home() / Defaults['DEFAULT_DEST_DIR'])
+    print(Defaults['DEFAULT_DEST_DIR'])
     # meta_data = test_module()
 
