@@ -36,7 +36,7 @@ def main(plate_id, options=None, conn=None):
             df_quality_control = pd.concat([df_quality_control, well_quality])
     df_final = pd.concat([df_final.loc[:, 'experiment':], df_final.loc[:, :'experiment']], axis=1).iloc[:, :-1]
     df_final.to_csv(exp_paths.final_data / f"{meta_data.plate}_final_data.csv")
-    df_quality_control.to_csv(exp_paths.quality_ctr / f"{meta_data.plate}_quality_ctr.csv")
+    df_quality_control.to_csv(exp_paths.final_data / f"{meta_data.plate}_quality_ctr.csv")
 
 
 if __name__ == '__main__':
