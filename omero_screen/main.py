@@ -15,6 +15,9 @@ def main(plate_id, options=None, conn=None):
     meta_data = MetaData(plate_id, conn)
     exp_paths = ExpPaths(meta_data)
 
+    with open(Defaults['DEFAULT_DEST_DIR'] + '/' + Defaults['DEFAULT_SUMMARY_FILE'], 'a') as f:
+      print(str(meta_data.plate), file=f)
+
 
     if torch.cuda.is_available():
         print(f"\n Using Cellpose with GPU. \n{SEPARATOR} ")

@@ -12,7 +12,7 @@ def create_job_script(args):
   omero_screen = 'Omero_Screen'
   omero_screen_prog = 'omero_screen_run_term'
   conda_module = 'Anaconda3/2022.05'
-  send_mail = './send-mail.py'
+  send_mail = 'send-mail.py'
 
   if not os.path.isfile(omero_screen_prog):
     raise Exception(f'Missing program: {omero_screen_prog}')
@@ -41,9 +41,9 @@ def create_job_script(args):
   name = 'omero_screen'[0:name_width] + '.' + str(pid)
 
   # Results file to record directory names for screen results
-  results_file = f'{results_dir}/screen-dir.{name}'
-  if os.path.isfile(results_file):
-    raise Exception(f'Results file exists: {results_file}')
+  results_file = f'screen-dir.{name}'
+  if os.path.isfile(f'{results_dir}/{results_file}'):
+    raise Exception(f'Results file exists: {results_dir}/{results_file}')
   open(results_file, 'w').close()
 
   # Create the job file
@@ -62,7 +62,7 @@ def create_job_script(args):
     if args.threads > 1:
       print(inspect.cleandoc(f'''\
         #$ -q smp.q
-        #$ -ps openmp {args.threads}
+        #$ -pe openmp {args.threads}
         #$ -l h_vmem=16G
         '''), file=f)
     if args.gpu:
@@ -97,12 +97,12 @@ def create_job_script(args):
     # Note: using mailx on the HPC is flakey (either delayed or fails).
     # Here we use a custom python script which sends immediately.
     subject = f'Job results: {name}'
-    msg = f'rsync -a --files-from={results_file} {args.username}'\
+    msg = f'rsync -ar --files-from=:{results_dir}/{results_file} {args.username}'\
           f'@apollo2.hpc.susx.ac.uk:{results_dir} .'
     #print(f'echo \'{msg}\' | mailx -s \'{subject}\' '\
     #  f'{args.username}@sussex.ac.uk', file=f)
     print(f'msg Sending result e-mail using {send_mail}', file=f)
-    print(f'{send_mail} -m \'{msg}\' -s \'{subject}\' '\
+    print(f'python {send_mail} -m \'{msg}\' -s \'{subject}\' '\
       f'{args.username}@sussex.ac.uk', file=f)
     print('msg Done', file=f)
     print(f'rm {script}', file=f)
@@ -141,7 +141,7 @@ def parse_args():
   group.add_argument('--no-submit', dest='submit', action='store_false',
     help='Do not submit the job script')
   group = parser.add_argument_group('Omero Screen environment')
-  group.add_argument('-e', '--env', dest='env', default='cellpose-pip5',
+  group.add_argument('-e', '--env', dest='env', default='omero-screen',
     help='Conda environment (default: %(default)s)')
   group = parser.add_argument_group('Omero Screen overrides')
   group.add_argument('-d', '--debug', dest='debug', action='store_true',
