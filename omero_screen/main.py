@@ -1,4 +1,4 @@
-from omero_screen import Defaults, SEPARATOR
+from omero_screen import Defaults
 from omero_screen.general_functions import omero_connect
 from omero_screen.data_structure import MetaData, ExpPaths
 from omero_screen.flatfield_corr import flatfieldcorr
@@ -20,9 +20,9 @@ def main(plate_id, options=None, conn=None):
 
 
     if torch.cuda.is_available():
-        print(f"\n Using Cellpose with GPU. \n{SEPARATOR} ")
+        print("Using Cellpose with GPU.")
     else:
-        print(f"\n Using Cellpose with CPU. \n{SEPARATOR} ")
+        print("Using Cellpose with CPU")
     df_final = pd.DataFrame()
     df_quality_control = pd.DataFrame()
     for count, well in enumerate(list(meta_data.plate_obj.listChildren())):
@@ -32,7 +32,8 @@ def main(plate_id, options=None, conn=None):
         except KeyError:
             cell_line = dict(ann.getValue())['Cell_Line']
         if cell_line != 'Empty':
-            print(f"\nAnalysing well row:{well.row}/col:{well.column} - {count + 1} of {meta_data.plate_length}.\n{SEPARATOR}")
+            message = f"{exp_paths.separator}\nAnalysing well row:{well.row}/col:{well.column} - {count + 1} of {meta_data.plate_length}."
+            print(message)
             flatfield_dict = flatfieldcorr(well, meta_data, exp_paths)
             well_data, well_quality = well_loop(well, meta_data, exp_paths, flatfield_dict)
             df_final = pd.concat([df_final, well_data])

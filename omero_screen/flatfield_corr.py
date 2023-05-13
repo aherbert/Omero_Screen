@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 from omero_screen.aggregator import ImageAggregator
-
 from omero_screen.general_functions import save_fig, scale_img, generate_image, generate_random_image, \
     omero_connect
 from omero_screen.data_structure import MetaData, ExpPaths
-from omero_screen import Defaults, SEPARATOR
-from skimage import io
+from omero_screen import Defaults
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 import matplotlib
-import pathlib
 import glob
 import platform
 
@@ -45,7 +42,7 @@ def generate_corr_dict(well, well_pos, channels, template_subfolder_path):
     Saves each flat field mask file with well position and channel name
     :return: a dictionary with channel_name : flatfield correction masks
     """
-    print(f"\nAssembling Flatfield Correction Masks for each Channel\n{SEPARATOR}")
+    print(f"\nAssembling Flatfield Correction Masks for each Channel\n")
     template_subfolder_path.mkdir(exist_ok=True)
     template_subfolder_path.mkdir(exist_ok=True)
     corr_dict = {}

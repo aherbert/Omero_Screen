@@ -7,7 +7,7 @@ Reads data from excel_path and stores them
 
 import pandas as pd
 import pathlib
-from omero_screen import Defaults, SEPARATOR
+from omero_screen import Defaults
 from omero_screen.general_functions import omero_connect
 
 
@@ -62,15 +62,14 @@ class ExpPaths:
         self.path = pathlib.Path(Defaults['DEFAULT_DEST_DIR']) / f"{self.meta_data.plate}"
         self.flatfield_templates = self.path / Defaults['FLATFIELD_TEMPLATES']
         self.final_data = self.path / Defaults['DATA']
-        self.temp_well_data = self.path / Defaults['TEMP_WELL_DATA']
 
     def _create_exp_dir(self):
-        path_list = [self.path, self.flatfield_templates, self.final_data,
-                     self.temp_well_data]
+        path_list = [self.path, self.flatfield_templates, self.final_data]
         for path in path_list:
             path.mkdir(exist_ok=True)
-
-        print(f'Gathering data and assembling directories for experiment {self.meta_data.plate}\n{SEPARATOR}')
+        message = f"Gathering data and assembling directories for experiment {self.meta_data.plate}"
+        self.separator = '='*len(message)
+        print(f"{self.separator}\n{message}")
 
 @omero_connect
 def test_module(conn=None):
