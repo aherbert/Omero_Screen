@@ -64,12 +64,15 @@ def create_job_script(args):
       print(inspect.cleandoc(f'''\
         #$ -q smp.q
         #$ -pe openmp {args.threads}
-        #$ -l h_vmem=16G
+        #$ -l h_vmem={args.memory}G
+        #$ -l m_mem_free={args.memory}G
         '''), file=f)
     if args.gpu:
       print(inspect.cleandoc(f'''\
+        #$ -q gpu.q
         #$ -l gpu_card=1
-        #$ -l h_vmem=16G
+        #$ -l h_vmem={args.memory}G
+        #$ -l m_mem_free={args.memory}G
         '''), file=f)
     # job script
     run = 'exec' if args.exec else 'cmd'
@@ -134,6 +137,9 @@ def parse_args():
   group.add_argument('-t', '--threads', type=int, dest='threads',
     default=1,
     help='Threads (default: %(default)s). Use when not executing on the GPU')
+  group.add_argument('-m', '--memory', type=int, dest='memory',
+    default=16,
+    help='Memory in Gb (default: %(default)s)')
   group.add_argument('--no-gpu', dest='gpu', action='store_false',
     help='Disable using the GPU')
   group.add_argument('--no-exec', dest='exec', action='store_false',
