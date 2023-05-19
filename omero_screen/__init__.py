@@ -5,7 +5,7 @@ __version__ = '0.1.1'
 
 import pathlib
 Defaults = {
-'DEFAULT_DEST_DIR': pathlib.Path.home() / "Desktop",  # Decides where the final data folder will be made
+'DEFAULT_DEST_DIR': str(pathlib.Path.home() / "Desktop"),  # Decides where the final data folder will be made
 'DEFAULT_SUMMARY_FILE': 'screen-dir',  # Record the result directory for the screen
 'FLATFIELD_TEMPLATES': "flatfield_correction_images",
 'DATA': "single_cell_data",
@@ -14,7 +14,6 @@ Defaults = {
 'TEMP_WELL_DATA': "temp_well_data",
 'PLOT_FIGURES': "figures",
 'DATA_CELLCYCLE_SUMMARY': "cellcycle_summary",
-'PATH': pathlib.Path.cwd().parent,
 'MODEL_DICT': {
     'nuclei': 'Nuclei_Hoechst',
     'RPE-1': 'RPE-1_Tub_Hoechst',
