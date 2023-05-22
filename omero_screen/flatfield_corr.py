@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 import matplotlib
-import glob
+from skimage import io
 import platform
 
 if platform.system() == 'Darwin':
@@ -18,23 +18,14 @@ def flatfieldcorr(well, meta_data, exp_paths) -> dict:
 
     :return:
     """
-
     channels = meta_data.channels
     well_pos = f"row_{well.row}_col{well.column}"
     template_path = exp_paths.flatfield_templates
     template_subfolder_path = template_path / f"{well_pos}"
-    if len(glob.glob(f"{str(template_subfolder_path)}/*.tif")) == 4:
-        return load_corr_dict(template_subfolder_path, channels)
     return generate_corr_dict(well, well_pos, channels, template_subfolder_path)
 
 
-def load_corr_dict(path, channels):
-    print(f"Loading Flatfield Correction Masks from File\n{SEPARATOR}")
-    corr_img_list = glob.glob(f'{str(path)}/*.tif')
-    if len(corr_img_list) == len(list(channels.keys())):
-        array_list = list(map(io.imread, corr_img_list))
-        channel_list = list(channels.keys())
-        return dict(zip(channel_list, array_list))
+
 
 
 def generate_corr_dict(well, well_pos, channels, template_subfolder_path):
@@ -52,8 +43,8 @@ def generate_corr_dict(well, well_pos, channels, template_subfolder_path):
         norm_mask = aggregate_imgs(well, channel)
         if Defaults['DEBUG']:
             io.imsave(template_subfolder_path / f"{corr_img_id}_flatfield_masks.tif", norm_mask)
-        example = gen_example(well, channel, norm_mask)
-        example_fig(example, well_pos, channel, template_subfolder_path)
+            example = gen_example(well, channel, norm_mask)
+            example_fig(example, well_pos, channel, template_subfolder_path)
         corr_dict[channel[0]] = norm_mask  # associates channel name with flatfield mask
     return corr_dict
 

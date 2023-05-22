@@ -4,16 +4,13 @@ from omero_screen.data_structure import Defaults, MetaData, ExpPaths
 from omero_screen.flatfield_corr import flatfieldcorr
 from omero_screen.general_functions import save_fig, generate_image, filter_segmentation, omero_connect, scale_img, \
     color_label
-from csbdeep.utils import normalize
 from skimage import measure, io
 import pandas as pd
 import numpy as np
-import os
-import logging
 import matplotlib.pyplot as plt
+import torch
+from cellpose import models
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
-logging.getLogger('tensorflow').setLevel(logging.FATAL)
 
 class NucImage:
     """
@@ -22,13 +19,12 @@ class NucImage:
     Stores corrected images as dict, and n_mask arrays.
     """
 
-    def __init__(self, well, omero_image, meta_data, exp_paths, flatfield_dict, stardist_model):
+    def __init__(self, well, omero_image, meta_data, exp_paths, flatfield_dict):
         self._well = well
         self.omero_image = omero_image
         self._meta_data = meta_data
         self._paths = exp_paths
         self._get_metadata()
-        self._stardist_model = stardist_model
         self._flatfield_dict = flatfield_dict
         self.img_dict = self._get_img_dict()
         self.n_mask = self._n_segmentation()
@@ -56,10 +52,17 @@ class NucImage:
 
     def _n_segmentation(self):
         """perform cellpose segmentation using nuclear mask """
-        scaled = scale_img(self.img_dict['DAPI'])
-        label_objects, nb_labels = self._stardist_model.predict_instances(normalize(scaled))
+        if torch.cuda.is_available():
+            segmentation_model = models.CellposeModel(gpu=True, model_type=Defaults['MODEL_DICT']['nuclei'])
+        else:
+            segmentation_model = models.CellposeModel(gpu=False, model_type=Defaults['MODEL_DICT']['nuclei'])
+
+
+        n_channels = [[0, 0]]
+        n_mask_array, n_flows, n_styles = segmentation_model.eval(self.img_dict['DAPI'], channels=n_channels)
+
         # return cleaned up mask using filter function
-        return filter_segmentation(label_objects)
+        return filter_segmentation(n_mask_array)
 
 
     def segmentation_figure(self):
