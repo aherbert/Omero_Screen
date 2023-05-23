@@ -68,8 +68,8 @@ def create_job_script(args):
         #$ -l m_mem_free={args.memory}G
         '''), file=f)
     if args.gpu:
+      # Do not use '-q gpu.q' as this queue has fewer hosts
       print(inspect.cleandoc(f'''\
-        #$ -q gpu.q
         #$ -l gpu_card=1
         #$ -l h_vmem={args.memory}G
         #$ -l m_mem_free={args.memory}G
