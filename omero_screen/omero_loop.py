@@ -30,10 +30,7 @@ def well_loop(well, meta_data, exp_paths, flatfield_dict):
         df_image_quality = image_data.quality_df
         df_well = pd.concat([df_well, df_image])
         df_well_quality = pd.concat([df_well_quality, df_image_quality])
-        if Defaults['DEBUG']:
-            df_well.to_pickle(str(df_well_path))
-            df_well_quality.to_pickle(str(df_well_quality_path))
-            if number == 1:
-                image.segmentation_figure()
-                image.save_example_tiff()
+        if number == 1 and Defaults['DEBUG']:
+            image.segmentation_figure()
+            image.save_example_tiff()
     return df_well, df_well_quality

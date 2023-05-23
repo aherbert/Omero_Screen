@@ -88,7 +88,7 @@ def scale_img(img: np.array, percentile: tuple = (1, 99)) -> np.array:
     return exposure.rescale_intensity(img, in_range=tuple(percentiles))
 
 
-def generate_image(image: str, channel: int) -> np.ndarray:
+def generate_image(image, channel: int) -> np.ndarray:
     """
     Turn Omero Image Object from Well into numpy nd-array that is returned
 

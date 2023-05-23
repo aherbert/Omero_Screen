@@ -51,8 +51,8 @@ class Image:
         img_dict = {}
         for channel in list(self.channels.items()):  # produces a tuple of channel key value pair (ie ('DAPI':0)
             corr_img = generate_image(self.omero_image, channel[1]) / self._flatfield_dict[channel[0]]
-            bgcorr_img = corr_img - np.percentile(corr_img, 0.1) +1
-            img_dict[channel[0]] = bgcorr_img  # using channel key here to link each image with its channel
+            #bgcorr_img = corr_img - np.percentile(corr_img, 0.2) +1
+            img_dict[channel[0]] = corr_img  # using channel key here to link each image with its channel
         return img_dict
 
     def _get_models(self):
@@ -68,7 +68,7 @@ class Image:
         if torch.cuda.is_available():
             segmentation_model = models.CellposeModel(gpu=True, model_type=Defaults['MODEL_DICT']['nuclei'])
         else:
-            segmentation_model = models.CellposeModel(gpu=False, model_type=Defaults['MODEL_DICT']['nuclei'])
+            segmentation_model = models.CellposeModel(gpu=True, model_type=Defaults['MODEL_DICT']['nuclei'])
 
 
         n_channels = [[0, 0]]
@@ -82,7 +82,7 @@ class Image:
         if torch.cuda.is_available():
             segmentation_model = models.CellposeModel(gpu=True, model_type=self._get_models())
         else:
-            segmentation_model = models.CellposeModel(gpu=False, model_type=self._get_models())
+            segmentation_model = models.CellposeModel(gpu=True, model_type=self._get_models())
         c_channels = [[2, 1]]
         # combine the 2 channel numpy array for cell segmentation with the nuclei channel
         comb_image = np.dstack([self.img_dict['DAPI'], self.img_dict['Tub']])

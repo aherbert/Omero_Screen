@@ -6,7 +6,7 @@
       <sourceFolder url="file://$MODULE_DIR$/omero_screen" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/data/secrets" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.10 (cellpose-py10)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.9 (cellpose-dev) (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyDocumentationSettings">

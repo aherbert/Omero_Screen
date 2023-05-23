@@ -95,7 +95,7 @@ class NucImageProperties:
 
     def __init__(self, well, image_obj, meta_data, exp_paths, featurelist=None):
         if featurelist is None:
-            featurelist = Defaults.FEATURELIST
+            featurelist = Defaults['FEATURELIST']
         self._meta_data = meta_data
         self.plate_name = meta_data.plate
         self._well = well

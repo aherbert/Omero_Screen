@@ -27,7 +27,7 @@ Defaults = {
     'GWL_MM231': 'MM231_Tub_Hoechst',
 },
 'NS': 'openmicroscopy.org/omero/client/mapAnnotation',
-'FEATURELIST': ['label', 'area', 'intensity_max', 'intensity_mean'],
+'FEATURELIST': ['label', 'area', 'intensity_max', 'intensity_min', 'intensity_mean'],
 'DEBUG': False
 }
 
