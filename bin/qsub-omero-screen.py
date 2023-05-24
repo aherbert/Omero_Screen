@@ -138,7 +138,7 @@ def parse_args():
     default=1,
     help='Threads (default: %(default)s). Use when not executing on the GPU')
   group.add_argument('-m', '--memory', type=int, dest='memory',
-    default=16,
+    default=20,
     help='Memory in Gb (default: %(default)s)')
   group.add_argument('--no-gpu', dest='gpu', action='store_false',
     help='Disable using the GPU')
