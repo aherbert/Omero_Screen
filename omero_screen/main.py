@@ -38,11 +38,13 @@ def main(plate_id, options=None, conn=None):
             well_data, well_quality = well_loop(well, meta_data, exp_paths, flatfield_dict)
             df_final = pd.concat([df_final, well_data])
             df_quality_control = pd.concat([df_quality_control, well_quality])
-    df_final = pd.concat([df_final.loc[:, 'experiment':], df_final.loc[:, :'experiment']], axis=1).iloc[:, :-1]
-    df_final.to_csv(exp_paths.final_data / f"{meta_data.plate}_final_data.csv")
+    cols = df_final.columns.tolist()
+    i = cols.index('experiment')
+    df_final.to_csv(exp_paths.final_data / f"{meta_data.plate}_final_data.csv",
+                    columns=cols[i:] + cols[:i])
     df_quality_control.to_csv(exp_paths.final_data / f"{meta_data.plate}_quality_ctr.csv")
 
 
 if __name__ == '__main__':
-    main(1124)
+    main(1237)
 

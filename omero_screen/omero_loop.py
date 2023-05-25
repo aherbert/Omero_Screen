@@ -11,9 +11,6 @@ import pathlib
 # Functions to loop through well object, assemble data for images and ave quality control data
 
 def well_loop(well, meta_data, exp_paths, flatfield_dict):
-    well_pos = f"row_{well.row}_col{well.column}"
-    df_well_path = exp_paths.final_data / f'{well_pos}_df_well'
-    df_well_quality_path = exp_paths.final_data / f'{well_pos}_df_well_quality'
     print(f"\nSegmenting and Analysing Images\n")
     df_well = pd.DataFrame()
     df_well_quality = pd.DataFrame()
