@@ -30,7 +30,7 @@ def main():
   if args.debug:
     # Print out information on torch usage
     def info(msg):
-      print(f'TORCH  - {msg}')
+      print(f'INFO   - {msg}')
   else:
     def info(msg):
       pass
@@ -93,14 +93,16 @@ def main():
     info(e)
     pass
 
+  mem(f'exit({code})')
+
   # Report if pytorch computation succeeded
   if code == CODE_TORCH_GPU:
-    info('OK: torch GPU computation available')
+    info('torch GPU computation available')
   elif code == CODE_TORCH_CPU:
-    info('PASS: torch CPU computation available')
+    print('WARN   - torch CPU computation available')
   else:
-    info('FAIL: torch GPU computation not available')
-  mem(f'exit({code})')
+    print('ERROR  - torch GPU not available')
+
   exit(code)
 
 # Standard boilerplate to call the main() function to begin
