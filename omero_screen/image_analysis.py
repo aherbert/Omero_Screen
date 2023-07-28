@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from omero_screen.data_structure import Defaults, MetaData, ExpPaths
+from omero_screen.database_links import Defaults, MetaData, ExpPaths
 from omero_screen.flatfield_corr import flatfieldcorr
 from omero_screen.general_functions import save_fig, generate_image, filter_segmentation, omero_connect, scale_img, \
     color_label

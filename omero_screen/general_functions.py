@@ -63,7 +63,40 @@ def omero_connect(func):
 
     return wrapper_omero_connect
 
+def omero_connect_test(func):
+    """
+    decorator to log in and generate omero connection
+    :param func: function to be decorated
+    :return: wrapper function: passes conn to function and closes it after execution
+    """
 
+    @functools.wraps(func)
+    def wrapper_omero_connect(*args, **kwargs):
+        try:
+            with open('../data/secrets/config_test.json') as file:
+                data = json.load(file)
+            username = data['username']
+            password = data['password']
+        except IOError:
+            username = input("Username: ")
+            password = getpass.getpass(prompt='Password: ')
+        conn = BlitzGateway(username, password, host="localhost")
+        value = None
+        try:
+            print('Connecting to Omero')
+            if conn.connect():
+                value = func(*args, **kwargs, conn=conn)
+                print('Disconnecting from Omero')
+            else:
+                print(f'Failed to connect to Omero: {conn.getLastError()}')
+        finally:
+            # No side effects if called without a connection
+
+            conn.close()
+
+        return value
+
+    return wrapper_omero_connect
 def time_it(func):
     """
     decorator to time functions
