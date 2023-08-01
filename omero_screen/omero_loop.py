@@ -10,7 +10,7 @@ import pathlib
 
 # Functions to loop through well object, assemble data for images and ave quality control data
 
-def well_loop(well, meta_data, exp_paths, flatfield_dict):
+def well_loop(conn, well, meta_data, exp_paths, flatfield_dict):
     print(f"\nSegmenting and Analysing Images\n")
     df_well = pd.DataFrame()
     df_well_quality = pd.DataFrame()
@@ -18,7 +18,7 @@ def well_loop(well, meta_data, exp_paths, flatfield_dict):
     for number in tqdm.tqdm(range(image_number)):
         omero_img = well.getImage(number)
         if 'Tub' in meta_data.channels.keys():
-            image = Image(well, omero_img, meta_data, exp_paths, flatfield_dict)
+            image = Image(conn, well, omero_img, meta_data, exp_paths, flatfield_dict)
             image_data = ImageProperties(well, image, meta_data, exp_paths)
         else:
             image = NucImage(well, omero_img, meta_data, exp_paths, flatfield_dict)

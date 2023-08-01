@@ -1,3 +1,4 @@
+import omero
 from omero.gateway import BlitzGateway
 import pathlib
 import numpy as np
@@ -168,3 +169,18 @@ def filter_segmentation(mask: np.ndarray) -> np.ndarray:
     mask_sizes[0] = 0
     cells_cleaned = mask_sizes[cleared]
     return cells_cleaned * mask
+
+
+def add_map_annotation(omero_object, key_value, conn=None):
+    """
+
+    :param omero_object:
+    :param data_dict:
+    :param conn:
+    :return:
+    """
+    map_ann = omero.gateway.MapAnnotationWrapper(conn)
+    map_ann.setNs(omero.constants.metadata.NSCLIENTMAPANNOTATION)
+    map_ann.setValue(key_value)
+    map_ann.save()
+    omero_object.linkAnnotation(map_ann)

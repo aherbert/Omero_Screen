@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import omero
 from omero_screen.database_links import Defaults, MetaData, ExpPaths
 from omero_screen.flatfield_corr import flatfieldcorr
 from omero_screen.general_functions import save_fig, generate_image, filter_segmentation, omero_connect, scale_img, \
@@ -22,7 +23,8 @@ class Image:
     Stores corrected images as dict, and n_mask, c_mask and cyto_mask arrays.
     """
 
-    def __init__(self, well, omero_image, meta_data, exp_paths, flatfield_dict):
+    def __init__(self, conn, well, omero_image, meta_data, exp_paths, flatfield_dict):
+        self._conn = conn
         self._well = well
         self.omero_image = omero_image
         self._meta_data = meta_data
@@ -30,9 +32,7 @@ class Image:
         self._get_metadata()
         self._flatfield_dict = flatfield_dict
         self.img_dict = self._get_img_dict()
-        self.n_mask = self._n_segmentation()
-        self.c_mask = self._c_segmentation()
-        self.cyto_mask = self._get_cyto()
+        self.n_mask, self.c_mask, self.cyto_mask = self._segmentation()
 
     def _get_metadata(self):
         self.channels = self._meta_data.channels
@@ -73,9 +73,8 @@ class Image:
 
         n_channels = [[0, 0]]
         n_mask_array, n_flows, n_styles = segmentation_model.eval(self.img_dict['DAPI'], channels=n_channels)
-
-        # return cleaned up mask using filter function
         return filter_segmentation(n_mask_array)
+
 
     def _c_segmentation(self):
         """perform cellpose segmentation using cell mask """
@@ -90,34 +89,79 @@ class Image:
         # return cleaned up mask using filter function
         return filter_segmentation(c_masks_array)
 
+    def _upload_masks(self, n_mask, c_mask):
+        """
+            Uploads generated images to OMERO server and links them to the specified dataset.
+            The id of the mask is stored as an annotation on the original screen image.
+
+            Parameters:
+            n_mask (numpy array): Nuclei segmentation mask
+            c_mask (numpy array): Cell segmentation mask
+            Returns:
+            None. The image is saved to the OMERO server and linked to the specified dataset.
+            """
+        array_list = [n_mask, c_mask]
+        image_name = f"{self.omero_image.getId()}_segmentation"
+        dataset = self._conn.getObject("Dataset", self._meta_data.data_set)
+        def plane_gen():
+            """Generator that yields each plane in the array_list"""
+            yield from array_list
+
+        # Create the image in the dataset
+        mask = self._conn.createImageFromNumpySeq(plane_gen(), image_name, 1, 2, 1, dataset=dataset)
+
+        # Create a map annotation to store the segmentation mask ID
+        key_value_data = [["Segmentation_Mask", str(mask.getId())]]
+
+        # Get the existing map annotations of the image
+        map_anns = list(self.omero_image.listAnnotations(ns=omero.constants.metadata.NSCLIENTMAPANNOTATION))
+        if map_anns:  # If there are existing map annotations
+            for ann in map_anns:
+                ann_values = dict(ann.getValue())
+                if "Segmentation_Mask" in ann_values:  # If the desired annotation exists
+                    self._conn.deleteObject(ann._obj)  # Delete the existing annotation
+        # Create a new map annotation
+        map_ann = omero.gateway.MapAnnotationWrapper(self._conn)
+        map_ann.setNs(omero.constants.metadata.NSCLIENTMAPANNOTATION)
+        map_ann.setValue(key_value_data)
+
+        map_ann.save()
+        self.omero_image.linkAnnotation(map_ann)
+
+    def _download_masks(self, image_id):
+        """Download masks from OMERO server and save as numpy arrays"""
+        masks = self._conn.getObject("Image", image_id)
+        n_mask = generate_image(masks, 0)
+        c_mask = generate_image(masks, 1)
+        return n_mask, c_mask
+
     def _get_cyto(self):
         """substract nuclei mask from cell mask to get cytoplasm mask """
-        overlap = (self.c_mask != 0) * (self.n_mask != 0)
-        cyto_mask_binary = (self.c_mask != 0) * (overlap == 0)
-        return self.c_mask * cyto_mask_binary
+        overlap = (self._c_mask != 0) * (self._n_mask != 0)
+        cyto_mask_binary = (self._c_mask != 0) * (overlap == 0)
+        return self._c_mask * cyto_mask_binary
 
-    def segmentation_figure(self):
-        """Generate matplotlib image for segmentation check and save to path (quality control)
-        """
-        dapi_img = scale_img(self.img_dict['DAPI'])
-        tub_img = scale_img(self.img_dict['Tub'])
-        dapi_color_labels = color_label(self.n_mask, dapi_img)
-        tub_color_labels = color_label(self.cyto_mask, dapi_img)
-        fig_list = [dapi_img, tub_img, dapi_color_labels, tub_color_labels]
-        title_list = ["DAPI image", "Tubulin image", "DAPI segmentation", "Tubulin image"]
-        fig, ax = plt.subplots(ncols=4, figsize=(16, 7))
-        for i in range(4):
-            ax[i].axis('off')
-            ax[i].imshow(fig_list[i])
-            ax[i].title.set_text(title_list[i])
-        save_fig(self._paths.quality_ctr, f'{self.well_pos}_segmentation_check')
-        plt.close(fig)
+    def _segmentation(self):
+        #check if masks already exist
+        image_name = f"{self.omero_image.getId()}_segmentation"
+        dataset_id = self._meta_data.data_set
+        dataset = self._conn.getObject('Dataset', dataset_id)
+        image_id = None
+        for image in dataset.listChildren():
+            if image.getName() == image_name:
+                image_id = image.getId()
+                print(f"Found image with ID: {image_id}")
+                self._n_mask, self._c_mask = self._download_masks(image_id)
+                self._cyto_mask = self._get_cyto()
+                break  # stop the loop once the image is found
+        if image_id is None:
+            self._n_mask, self._c_mask = self._n_segmentation(), self._c_segmentation()
+            self._cyto_mask = self._get_cyto()
+            self._upload_masks(self._n_mask, self._c_mask)
+        return self._n_mask, self._c_mask, self._cyto_mask
 
-    def save_example_tiff(self):
-        """Combines arrays from image_dict and saves images as tif files"""
-        comb_image = np.dstack(list(self.img_dict.values()))
-        io.imsave(str(self._paths.example_img / f'{self.well_pos}_segmentation_check.tif'), comb_image,
-                  check_contrast=False)
+
+
 
 
 class ImageProperties:
@@ -215,18 +259,18 @@ class ImageProperties:
 if __name__ == "__main__":
     @omero_connect
     def feature_extraction_test(conn=None):
-        meta_data = MetaData(1107, conn)
+        meta_data = MetaData(1237, conn)
         exp_paths = ExpPaths(meta_data)
-        well = conn.getObject("Well", 12757)
+        well = conn.getObject("Well", 15401)
         omero_image = well.getImage(0)
-        flatfield_dict = flatfieldcorr(well, meta_data, exp_paths)
-        print(Image(well, omero_image, meta_data, exp_paths, flatfield_dict))
-        image = Image(well, omero_image, meta_data, exp_paths, flatfield_dict)
-        image_data = ImageProperties(well, image, meta_data, exp_paths)
-        image.segmentation_figure()
-        df_final = image_data.image_df
-        df_final = pd.concat([df_final.loc[:, 'experiment':], df_final.loc[:, :'experiment']], axis=1).iloc[:, :-1]
-        print(df_final)
+        flatfield_dict = flatfieldcorr(meta_data, conn)
+        image = Image(conn, well, omero_image, meta_data, exp_paths, flatfield_dict)
+        print(image.n_mask.shape)
+        # image_data = ImageProperties(well, image, meta_data, exp_paths)
+        # image.segmentation_figure()
+        # df_final = image_data.image_df
+        # df_final = pd.concat([df_final.loc[:, 'experiment':], df_final.loc[:, :'experiment']], axis=1).iloc[:, :-1]
+        #print(df_final)
 
 
 

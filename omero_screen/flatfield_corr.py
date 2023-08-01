@@ -12,7 +12,7 @@ The flatfield corr function returns a dictionary with channel names and the corr
 import omero
 from omero_screen.aggregator import ImageAggregator
 from omero_screen.general_functions import scale_img, generate_image, \
-    omero_connect
+    omero_connect, add_map_annotation
 from omero_screen.database_links import MetaData
 import matplotlib.pyplot as plt
 import numpy as np
@@ -43,7 +43,7 @@ def flatfieldcorr(meta_data, conn) -> dict:
 
     plate = meta_data.plate_obj
     channels = meta_data.channels
-    image_name = f"{meta_data.plate}_flatfield_masks"
+    image_name = f"{meta_data.plate_id}_flatfield_masks"
     dataset_id = meta_data.data_set
     dataset = conn.getObject('Dataset', dataset_id)  # Fetch the dataset
     image_dict = {}
@@ -97,13 +97,7 @@ def upload_images(conn, dataset, image_name, image_dict):
     print(f"Created image with ID: {image.getId()}")
     # Create a dictionary of channel names
     channel_dict = [[f"channel_{i}", name] for i, name in enumerate(channel_names)]
-
-    # Add the dictionary as a MapAnnotation to the image
-    map_ann = omero.gateway.MapAnnotationWrapper(conn)
-    map_ann.setNs(omero.constants.metadata.NSCLIENTMAPANNOTATION)
-    map_ann.setValue(channel_dict)
-    map_ann.save()
-    image.linkAnnotation(map_ann)
+    add_map_annotation(image, channel_dict, conn=conn)
 
 def load_image_to_dict(conn, image_id):
     """
