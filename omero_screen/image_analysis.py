@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import omero
-from omero_screen.database_links import Defaults, MetaData, ExpPaths
+from omero_screen.database_links import Defaults, MetaData, ProjectSetup
 from omero_screen.flatfield_corr import flatfieldcorr
 from omero_screen.general_functions import save_fig, generate_image, filter_segmentation, omero_connect, scale_img, \
     color_label
@@ -23,12 +23,12 @@ class Image:
     Stores corrected images as dict, and n_mask, c_mask and cyto_mask arrays.
     """
 
-    def __init__(self, conn, well, omero_image, meta_data, exp_paths, flatfield_dict):
+    def __init__(self, conn, well, omero_image, meta_data, project_data, flatfield_dict):
         self._conn = conn
         self._well = well
         self.omero_image = omero_image
         self._meta_data = meta_data
-        self._paths = exp_paths
+        self.dataset_id = project_data.dataset_id
         self._get_metadata()
         self._flatfield_dict = flatfield_dict
         self.img_dict = self._get_img_dict()
@@ -102,7 +102,7 @@ class Image:
             """
         array_list = [n_mask, c_mask]
         image_name = f"{self.omero_image.getId()}_segmentation"
-        dataset = self._conn.getObject("Dataset", self._meta_data.data_set)
+        dataset = self._conn.getObject("Dataset", self.dataset_id)
         def plane_gen():
             """Generator that yields each plane in the array_list"""
             yield from array_list
@@ -144,7 +144,7 @@ class Image:
     def _segmentation(self):
         #check if masks already exist
         image_name = f"{self.omero_image.getId()}_segmentation"
-        dataset_id = self._meta_data.data_set
+        dataset_id = self.dataset_id
         dataset = self._conn.getObject('Dataset', dataset_id)
         image_id = None
         for image in dataset.listChildren():
@@ -259,12 +259,12 @@ class ImageProperties:
 if __name__ == "__main__":
     @omero_connect
     def feature_extraction_test(conn=None):
-        meta_data = MetaData(1237, conn)
-        exp_paths = ExpPaths(meta_data)
+        meta_data = MetaData(conn, plate_id=1237)
+        project_data = ProjectSetup(1237, conn)
         well = conn.getObject("Well", 15401)
         omero_image = well.getImage(0)
-        flatfield_dict = flatfieldcorr(meta_data, conn)
-        image = Image(conn, well, omero_image, meta_data, exp_paths, flatfield_dict)
+        flatfield_dict = flatfieldcorr(meta_data, project_data, conn)
+        image = Image(conn, well, omero_image, meta_data, project_data, flatfield_dict)
         print(image.n_mask.shape)
         # image_data = ImageProperties(well, image, meta_data, exp_paths)
         # image.segmentation_figure()

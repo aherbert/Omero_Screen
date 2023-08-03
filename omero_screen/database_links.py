@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 """Module to link to the omero db, extract metadata and link a project/dataset to the plate."""
 import tempfile
-
+from omero_screen.general_functions import omero_connect
 import omero
 import pandas as pd
-from omero.gateway import DatasetWrapper
+from omero.gateway import DatasetWrapper, FileAnnotationWrapper, MapAnnotationWrapper
 from omero.rtypes import rstring
-
 from omero_screen import Defaults
-from omero_screen.general_functions import add_map_annotation
+from omero_screen.omero_functions import add_map_annotations, delete_map_annotations
+
 
 
 class MetaData:
@@ -20,6 +20,8 @@ class MetaData:
         self.plate_obj = self.conn.getObject("Plate", self.plate_id)
         self.plate_length = len(list(self.plate_obj.listChildren()))
         self.channels, self.well_inputs = self._get_metadata()
+        self._set_well_inputs()
+
 
     def _get_metadata(self):
         """
@@ -30,19 +32,25 @@ class MetaData:
         file_anns = self.plate_obj.listAnnotations()
 
         for ann in file_anns:
-            if isinstance(ann, omero.gateway.FileAnnotationWrapper) and ann.getFile().getName().endswith(
+            if isinstance(ann, FileAnnotationWrapper) and ann.getFile().getName().endswith(
                     'metadata.xlsx'):
                 return self._get_channel_data_from_excel(ann)
 
         return self._get_channel_data_from_map()
 
     def _get_channel_data_from_map(self):
-        if ann := self.plate_obj.getAnnotation(Defaults['NS']):
-            map_data = dict(ann.getValue())
+        annotations = self.plate_obj.listAnnotations()
+        map_annotations = [ann for ann in annotations if isinstance(ann, omero.gateway.MapAnnotationWrapper)]
+
+        for map_ann in map_annotations:
+            map_data = dict(map_ann.getValue())
             if 'DAPI' in map_data or 'Hoechst' in map_data:
                 print("Found map annotation with 'DAPI' or 'Hoechst'")
-                return self._get_channel_data(ann), None
+                key_value_data = map_ann.getValue()
+                return self._get_channel_data(key_value_data), None
+
         raise ValueError("No map annotation available and Excel file not found.")
+
 
     def _get_channel_data_from_excel(self, ann):
         self._clear_map_annotation()
@@ -52,9 +60,10 @@ class MetaData:
             self._download_file_to_tmp(original_file, tmp)
             data = pd.read_excel(tmp.name, sheet_name=None)
         key_value_data = data['Sheet1'].astype(str).values.tolist()
-        add_map_annotation(self.plate_obj, key_value_data, conn=self.conn)
+        add_map_annotations(self.plate_obj, key_value_data, conn=self.conn)
         channel_data = {row[0]: row[1] for row in key_value_data}
-        return channel_data, data['Sheet2']
+        well_data = data['Sheet2']
+        return self._get_channel_data(channel_data), well_data
 
     def _clear_map_annotation(self):
         if map_ann := self.plate_obj.getAnnotation(Defaults['NS']):
@@ -66,9 +75,9 @@ class MetaData:
             for chunk in original_file.asFileObj():
                 f.write(chunk)
 
-    def _get_channel_data(self, ann):
+    def _get_channel_data(self, key_value_data):
         """"""
-        channels = dict(ann.getValue())
+        channels = dict(key_value_data)
         if 'Hoechst' in channels:
             channels['DAPI'] = channels.pop('Hoechst')
         # changing channel number to integer type
@@ -77,10 +86,67 @@ class MetaData:
         return channels
 
 
+    def _set_well_inputs(self):
+        """Function to deal with the well metadata"""
+        # if there are no well input data check if there are metadata already present
+        if self.well_inputs is None:
+            if not self._found_cell_line():
+                raise ValueError("Well metadata are not present")
+        else:
+            df = self.well_inputs
+            df_dict = {row['Well']: [[col, row[col]] for col in df.columns if col != 'Well'] for _, row in df.iterrows()}
+            for well in self.plate_obj.listChildren():
+                # overwrite map annotation if present
+                delete_map_annotations(well, conn=self.conn)
+                wellname = self.convert_well_names(well)
+                for key in df_dict:
+                    if wellname == key:
+                        add_map_annotations(well, df_dict[key], conn=self.conn)
+
+
+
+    def convert_well_names(self, well):
+        row_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'  # assuming no more than 26 rows
+        row_number = well.row
+        column_number = well.column + 1
+        return f'{row_letters[row_number]}{column_number}'
+
+    def _found_cell_line(self):
+        """
+        Checks if the plate with id 'plate_id' contains a 'cell_line' annotation for all wells
+        """
+        plate = self.conn.getObject("Plate", self.plate_id)
+        if plate is None:
+            print(f"Cannot find plate: {self.plate_id}")
+            return False
+
+        well_list = []
+        for well in plate.listChildren():
+            annotations = [ann for ann in well.listAnnotations() if isinstance(ann, MapAnnotationWrapper)]
+            found_cell_line = any(
+                'cell_line' in dict(ann.getValue()) for ann in annotations
+            )
+
+            if not found_cell_line:
+                well_list.append(well.id)
+
+        if well_list:
+            print(f"Found {len(well_list)} wells without a 'cell_line' annotation")
+        else:
+            print("All wells have a 'cell_line' annotation")
+
+        return not well_list
+
+    def well_conditions(self, current_well):
+        """Method to get the well conditions from the well metadata"""
+        well = self.conn.getObject("Well", current_well)
+        ann = well.getAnnotation(Defaults['NS'])
+        return dict(ann.getValue())
+
 class ProjectSetup:
     """Class to set up the Omero-Screen project and organise the metadata"""
 
-    def __init__(self, conn, plate_id):
+    def __init__(self, plate_id, conn):
         self.conn = conn
         self.plate_id = plate_id
         self.project_id = self._create_project()
@@ -232,3 +298,17 @@ class ProjectSetup:
 #         message = f"Gathering data and assembling directories for experiment {self.meta_data.plate}"
 #         self.separator = '='*len(message)
 #         print(f"{self.separator}\n{message}")
+
+
+if __name__ == "__main__":
+
+    @omero_connect
+    def systems_test(conn=None):
+        instance = MetaData(conn, plate_id=1237)
+        print(instance.channels)
+        plate = conn.getObject("Plate", 1237)
+        for well in plate.listChildren():
+            print(instance.well_conditions(well.getId()))
+
+
+    systems_test()
