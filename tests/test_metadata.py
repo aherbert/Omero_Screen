@@ -2,8 +2,8 @@
 import pytest
 from omero_screen import Defaults
 from omero_screen.database_links import MetaData
-from omero_screen.omero_functions import add_map_annotations
-from tests.conftest import attach_excel_file, delete_map_annotations
+from omero_screen.omero_functions import add_map_annotations, delete_map_annotations
+from tests.conftest import attach_excel_file
 
 
 def test_no_excel_no_map(omero_conn):
