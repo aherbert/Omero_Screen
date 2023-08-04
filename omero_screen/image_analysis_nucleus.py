@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 from omero_screen import Defaults
-from omero_screen.database_links import Defaults, MetaData, ExpPaths
+import omero
+from omero_screen.database_links import Defaults, MetaData, ProjectSetup
 from omero_screen.flatfield_corr import flatfieldcorr
 from omero_screen.general_functions import save_fig, generate_image, filter_segmentation, omero_connect, scale_img, \
     color_label
+from omero_screen.omero_functions import upload_masks
 from skimage import measure, io
 import pandas as pd
 import numpy as np
@@ -19,11 +21,12 @@ class NucImage:
     Stores corrected images as dict, and n_mask arrays.
     """
 
-    def __init__(self, well, omero_image, meta_data, exp_paths, flatfield_dict):
+    def __init__(self, conn, well, image_obj, meta_data, project_data, flatfield_dict):
+        self._conn = conn
         self._well = well
-        self.omero_image = omero_image
+        self.omero_image = image_obj
         self._meta_data = meta_data
-        self._paths = exp_paths
+        self.dataset_id = project_data.dataset_id
         self._get_metadata()
         self._flatfield_dict = flatfield_dict
         self.img_dict = self._get_img_dict()
@@ -46,45 +49,40 @@ class NucImage:
         img_dict = {}
         for channel in list(self.channels.items()):  # produces a tuple of channel key value pair (ie ('DAPI':0)
             corr_img = generate_image(self.omero_image, channel[1]) / self._flatfield_dict[channel[0]]
-            img_dict[channel[0]] = corr_img[30:1050, 30:1050]  # using channel key here to link each image with its channel
+            img_dict[channel[0]] = corr_img[30:1050, 30:1050]  # cropping the image to avoid flat field corr problems at the border
         return img_dict
-
+    def _download_masks(self, image_id):
+        """Download masks from OMERO server and save as numpy arrays"""
+        masks = self._conn.getObject("Image", image_id)
+        return generate_image(masks, 0)
 
     def _n_segmentation(self):
         """perform cellpose segmentation using nuclear mask """
-        if torch.cuda.is_available():
-            segmentation_model = models.CellposeModel(gpu=True, model_type=Defaults['MODEL_DICT']['nuclei'])
-        else:
-            segmentation_model = models.CellposeModel(gpu=False, model_type=Defaults['MODEL_DICT']['nuclei'])
+        image_name = f"{self.omero_image.getId()}_segmentation"
+        dataset_id = self.dataset_id
+        dataset = self._conn.getObject('Dataset', dataset_id)
+        image_id = None
+        for image in dataset.listChildren():
+            if image.getName() == image_name:
+                image_id = image.getId()
+                print(f"Found image with ID: {image_id}")
+                self._n_mask_array = self._download_masks(image_id)
+                break  # stop the loop once the image is found
+        if image_id is None:
+            if torch.cuda.is_available():
+                segmentation_model = models.CellposeModel(gpu=True, model_type=Defaults['MODEL_DICT']['nuclei'])
+            else:
+                segmentation_model = models.CellposeModel(gpu=False, model_type=Defaults['MODEL_DICT']['nuclei'])
+            n_channels = [[0, 0]]
+            self._n_mask_array, n_flows, n_styles = segmentation_model.eval(self.img_dict['DAPI'], channels=n_channels)
+            upload_masks(self.dataset_id, self.omero_image, [self._n_mask_array], self._conn)
+            # return cleaned up mask using filter function
+        return filter_segmentation(self._n_mask_array)
 
 
-        n_channels = [[0, 0]]
-        n_mask_array, n_flows, n_styles = segmentation_model.eval(self.img_dict['DAPI'], channels=n_channels)
-
-        # return cleaned up mask using filter function
-        return filter_segmentation(n_mask_array)
 
 
-    def segmentation_figure(self):
-        """Generate matplotlib image for segmentation check and save to path (quality control)
-        """
-        dapi_img = scale_img(self.img_dict['DAPI'])
-        dapi_color_labels = color_label(self.n_mask, dapi_img)
-        fig_list = [dapi_img, dapi_color_labels]
-        title_list = ["DAPI image", "DAPI segmentation"]
-        fig, ax = plt.subplots(ncols=2, figsize=(8, 7))
-        for i in range(2):
-            ax[i].axis('off')
-            ax[i].imshow(fig_list[i])
-            ax[i].title.set_text(title_list[i])
-        save_fig(self._paths.quality_ctr, f'{self.well_pos}_segmentation_check')
-        plt.close(fig)
 
-    def save_example_tiff(self):
-        """Combines arrays from image_dict and saves images as tif files"""
-        comb_image = np.dstack(list(self.img_dict.values()))
-        io.imsave(str(self._paths.example_img / f'{self.well_pos}_segmentation_check.tif'), comb_image,
-                  check_contrast=False)
 
 
 class NucImageProperties:
@@ -93,11 +91,11 @@ class NucImageProperties:
     and generates combined data frames.
     """
 
-    def __init__(self, well, image_obj, meta_data, exp_paths, featurelist=None):
+    def __init__(self, well, image_obj, meta_data, featurelist=None):
         if featurelist is None:
             featurelist = Defaults['FEATURELIST']
         self._meta_data = meta_data
-        self.plate_name = meta_data.plate
+        self.plate_name = meta_data.plate_obj.getName()
         self._well = well
         self._well_id = well.getId()
         self._image = image_obj
@@ -161,26 +159,7 @@ class NucImageProperties:
         return pd.concat(df_list)
 
 
-# test
-
-
-if __name__ == "__main__":
-    @omero_connect
-    def feature_extraction_test(conn=None):
-        meta_data = MetaData(1107, conn)
-        exp_paths = ExpPaths(meta_data)
-        well = conn.getObject("Well", 12757)
-        omero_image = well.getImage(0)
-        flatfield_dict = flatfieldcorr(well, meta_data, exp_paths)
-        print(NucImage(well, omero_image, meta_data, exp_paths, flatfield_dict))
-        image = NucImage(well, omero_image, meta_data, exp_paths, flatfield_dict)
-        image_data = NucImageProperties(well, image, meta_data, exp_paths)
-        image.segmentation_figure()
-        df_final = image_data.image_df
-        df_final = pd.concat([df_final.loc[:, 'experiment':], df_final.loc[:, :'experiment']], axis=1).iloc[:, :-1]
-        print(df_final)
 
 
 
 
-    feature_extraction_test()

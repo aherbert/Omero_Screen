@@ -4,6 +4,7 @@ from omero_screen.database_links import Defaults, MetaData, ProjectSetup
 from omero_screen.flatfield_corr import flatfieldcorr
 from omero_screen.general_functions import save_fig, generate_image, filter_segmentation, omero_connect, scale_img, \
     color_label
+from omero_screen.omero_functions import upload_masks
 
 
 from skimage import measure, io
@@ -23,10 +24,10 @@ class Image:
     Stores corrected images as dict, and n_mask, c_mask and cyto_mask arrays.
     """
 
-    def __init__(self, conn, well, omero_image, meta_data, project_data, flatfield_dict):
+    def __init__(self, conn, well, image_obj, meta_data, project_data, flatfield_dict):
         self._conn = conn
         self._well = well
-        self.omero_image = omero_image
+        self.omero_image = image_obj
         self._meta_data = meta_data
         self.dataset_id = project_data.dataset_id
         self._get_metadata()
@@ -52,7 +53,7 @@ class Image:
         for channel in list(self.channels.items()):  # produces a tuple of channel key value pair (ie ('DAPI':0)
             corr_img = generate_image(self.omero_image, channel[1]) / self._flatfield_dict[channel[0]]
             #bgcorr_img = corr_img - np.percentile(corr_img, 0.2) +1
-            img_dict[channel[0]] = corr_img  # using channel key here to link each image with its channel
+            img_dict[channel[0]] = corr_img[30:1050, 30:1050]  # cropping the image to avoid flat field corr problems at the border
         return img_dict
 
     def _get_models(self):
@@ -89,45 +90,6 @@ class Image:
         # return cleaned up mask using filter function
         return filter_segmentation(c_masks_array)
 
-    def _upload_masks(self, n_mask, c_mask):
-        """
-            Uploads generated images to OMERO server and links them to the specified dataset.
-            The id of the mask is stored as an annotation on the original screen image.
-
-            Parameters:
-            n_mask (numpy array): Nuclei segmentation mask
-            c_mask (numpy array): Cell segmentation mask
-            Returns:
-            None. The image is saved to the OMERO server and linked to the specified dataset.
-            """
-        array_list = [n_mask, c_mask]
-        image_name = f"{self.omero_image.getId()}_segmentation"
-        dataset = self._conn.getObject("Dataset", self.dataset_id)
-        def plane_gen():
-            """Generator that yields each plane in the array_list"""
-            yield from array_list
-
-        # Create the image in the dataset
-        mask = self._conn.createImageFromNumpySeq(plane_gen(), image_name, 1, 2, 1, dataset=dataset)
-
-        # Create a map annotation to store the segmentation mask ID
-        key_value_data = [["Segmentation_Mask", str(mask.getId())]]
-
-        # Get the existing map annotations of the image
-        map_anns = list(self.omero_image.listAnnotations(ns=omero.constants.metadata.NSCLIENTMAPANNOTATION))
-        if map_anns:  # If there are existing map annotations
-            for ann in map_anns:
-                ann_values = dict(ann.getValue())
-                if "Segmentation_Mask" in ann_values:  # If the desired annotation exists
-                    self._conn.deleteObject(ann._obj)  # Delete the existing annotation
-        # Create a new map annotation
-        map_ann = omero.gateway.MapAnnotationWrapper(self._conn)
-        map_ann.setNs(omero.constants.metadata.NSCLIENTMAPANNOTATION)
-        map_ann.setValue(key_value_data)
-
-        map_ann.save()
-        self.omero_image.linkAnnotation(map_ann)
-
     def _download_masks(self, image_id):
         """Download masks from OMERO server and save as numpy arrays"""
         masks = self._conn.getObject("Image", image_id)
@@ -157,7 +119,7 @@ class Image:
         if image_id is None:
             self._n_mask, self._c_mask = self._n_segmentation(), self._c_segmentation()
             self._cyto_mask = self._get_cyto()
-            self._upload_masks(self._n_mask, self._c_mask)
+            upload_masks(self.dataset_id, self.omero_image, [self._n_mask, self._c_mask], self._conn)
         return self._n_mask, self._c_mask, self._cyto_mask
 
 
@@ -170,11 +132,11 @@ class ImageProperties:
     and generates combined data frames.
     """
 
-    def __init__(self, well, image_obj, meta_data, exp_paths, featurelist=None):
+    def __init__(self, well, image_obj, meta_data, featurelist=None):
         if featurelist is None:
             featurelist = Defaults['FEATURELIST']
         self._meta_data = meta_data
-        self.plate_name = meta_data.plate
+        self.plate_name = meta_data.plate_obj.getName()
         self._well = well
         self._well_id = well.getId()
         self._image = image_obj
