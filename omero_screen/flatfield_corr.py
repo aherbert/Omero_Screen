@@ -11,9 +11,13 @@ The flatfield corr function returns a dictionary with channel names and the corr
 
 import omero
 from omero_screen.aggregator import ImageAggregator
-from omero_screen.general_functions import scale_img, generate_image, \
-    omero_connect, add_map_annotation
-from omero_screen.database_links import MetaData, ProjectSetup
+from omero_screen.general_functions import (
+    scale_img,
+    generate_image,
+    omero_connect,
+    add_map_annotation,
+)
+from omero_screen.metadata import MetaData, ProjectSetup
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
@@ -24,8 +28,9 @@ import random
 import os
 
 
-if platform.system() == 'Darwin':
-     matplotlib.use('MacOSX')  # avoid matplotlib warning about interactive backend
+if platform.system() == "Darwin":
+    matplotlib.use("MacOSX")  # avoid matplotlib warning about interactive backend
+
 
 def flatfieldcorr(meta_data, project_data, conn) -> dict:
     """
@@ -41,11 +46,11 @@ def flatfieldcorr(meta_data, project_data, conn) -> dict:
     dict: Dictionary containing flatfield correction masks.
     """
 
-    plate = conn.getObject("Plate",meta_data.plate_id)
+    plate = conn.getObject("Plate", meta_data.plate_id)
     channels = meta_data.channels
     image_name = f"{meta_data.plate_id}_flatfield_masks"
     dataset_id = project_data.dataset_id
-    dataset = conn.getObject('Dataset', dataset_id)  # Fetch the dataset
+    dataset = conn.getObject("Dataset", dataset_id)  # Fetch the dataset
     image_dict = {}
     image_id = None
     # Loop over each image in the dataset to check if the required image is already present
@@ -68,48 +73,50 @@ def flatfieldcorr(meta_data, project_data, conn) -> dict:
     return image_dict
 
 
-
-
 def upload_images(conn, dataset, image_name, image_dict):
     """
-        Uploads generated images to OMERO server.
+    Uploads generated images to OMERO server.
 
-        Parameters:
-        conn (BlitzGateway): Connection object to an OMERO server.
-        dataset (omero.gateway.DatasetWrapper): DatasetWrapper object representing the dataset to which the images are to be uploaded.
-        image_name (str): Name to be given to the uploaded image.
-        image_dict (dict): Dictionary containing channel names and corresponding image arrays.
+    Parameters:
+    conn (BlitzGateway): Connection object to an OMERO server.
+    dataset (omero.gateway.DatasetWrapper): DatasetWrapper object representing the dataset to which the images are to be uploaded.
+    image_name (str): Name to be given to the uploaded image.
+    image_dict (dict): Dictionary containing channel names and corresponding image arrays.
 
-        Returns:
-        None. The image is saved to the OMERO server and linked to the specified dataset.
-        """
+    Returns:
+    None. The image is saved to the OMERO server and linked to the specified dataset.
+    """
     array_list = []
     channel_names = list(image_dict.keys())  # get channel names
     for array in image_dict.values():
-      # Wrap the array in a generato
-      array_list.append(array)
+        # Wrap the array in a generato
+        array_list.append(array)
+
     def plane_gen():
         """Generator that yields each plane in the array_list"""
         yield from array_list
 
     # Create the image in the dataset
-    image = conn.createImageFromNumpySeq(plane_gen(), image_name, 1, 4, 1, dataset=dataset)
+    image = conn.createImageFromNumpySeq(
+        plane_gen(), image_name, 1, 4, 1, dataset=dataset
+    )
     print(f"Created image with ID: {image.getId()}")
     # Create a dictionary of channel names
     channel_dict = [[f"channel_{i}", name] for i, name in enumerate(channel_names)]
     add_map_annotation(image, channel_dict, conn=conn)
 
+
 def load_image_to_dict(conn, image_id):
     """
-        Loads an image from the OMERO server and converts it to a dictionary with channel names as keys and corresponding image arrays as values.
+    Loads an image from the OMERO server and converts it to a dictionary with channel names as keys and corresponding image arrays as values.
 
-        Parameters:
-        conn (BlitzGateway): Connection object to an OMERO server.
-        image_id (int): ID of the image to be loaded from the OMERO server.
+    Parameters:
+    conn (BlitzGateway): Connection object to an OMERO server.
+    image_id (int): ID of the image to be loaded from the OMERO server.
 
-        Returns:
-        dict: Dictionary containing channel names and corresponding image arrays.
-        """
+    Returns:
+    dict: Dictionary containing channel names and corresponding image arrays.
+    """
     # Fetch the image
     image = conn.getObject("Image", image_id)
     if not image:
@@ -125,15 +132,21 @@ def load_image_to_dict(conn, image_id):
     annotations = image.listAnnotations()
 
     # Filter for MapAnnotations only
-    map_anns = [ann for ann in annotations if isinstance(ann, omero.gateway.MapAnnotationWrapper)]
+    map_anns = [
+        ann
+        for ann in annotations
+        if isinstance(ann, omero.gateway.MapAnnotationWrapper)
+    ]
 
     # Extract the channel names from the annotations
     for ann in map_anns:
         kv_pairs = ann.getValue()
         for kv in kv_pairs:
             key, value = kv
-            if key.startswith('channel'):
-                channel_num = int(key.split('_')[-1])  # Assumes channel keys are in the format 'Channel_X'
+            if key.startswith("channel"):
+                channel_num = int(
+                    key.split("_")[-1]
+                )  # Assumes channel keys are in the format 'Channel_X'
                 # Retrieve the plane corresponding to the current channel
                 plane = pixels.getPlane(0, channel_num, 0)  # Assumes Z=0, T=0
                 # Add to the dictionary
@@ -165,6 +178,7 @@ def generate_corr_dict(plate, channels, conn, dataset_id):
         corr_dict[channel[0]] = norm_mask  # associates channel name with flatfield mask
     return corr_dict
 
+
 def random_imgs(plate):
     """
     Selects a random image from each well in the given plate.
@@ -186,21 +200,21 @@ def random_imgs(plate):
 
 def aggregate_imgs(img_list, channel, conn):
     """
-       Aggregates images in a well for a specified channel and generates correction mask using the Aggregator Module.
+    Aggregates images in a well for a specified channel and generates correction mask using the Aggregator Module.
 
-       Parameters:
-       img_list (list): List of image IDs to aggregate.
-       channel (dict): Dictionary containing channel information.
-       conn (BlitzGateway): Connection object to an OMERO server.
+    Parameters:
+    img_list (list): List of image IDs to aggregate.
+    channel (dict): Dictionary containing channel information.
+    conn (BlitzGateway): Connection object to an OMERO server.
 
-       Returns:
-       ndarray: Flatfield correction mask for the given channel.
-       """
+    Returns:
+    ndarray: Flatfield correction mask for the given channel.
+    """
     agg = ImageAggregator(60)
     for img_id in tqdm(img_list):
-       image = conn.getObject("Image", img_id)
-       image_array = generate_image(image, channel[1])
-       agg.add_image(image_array)
+        image = conn.getObject("Image", img_id)
+        image_array = generate_image(image, channel[1])
+        agg.add_image(image_array)
     blurred_agg_img = agg.get_gaussian_image(30)
     return blurred_agg_img / blurred_agg_img.mean()
 
@@ -226,49 +240,55 @@ def gen_example(img_list, channel, mask, conn):
     bgcorr_img = corr_img - np.percentile(corr_img, 0.2) + 1
     corr_scaled = scale_img(bgcorr_img)
     # order all images for plotting
-    return [(scaled, 'original image'), (np.diagonal(example_img), 'diag. intensities'),
-            (corr_scaled, 'corrected image'), (np.diagonal(corr_img), 'diag. intensities'),
-            (mask, 'flatfield correction mask')]
+    return [
+        (scaled, "original image"),
+        (np.diagonal(example_img), "diag. intensities"),
+        (corr_scaled, "corrected image"),
+        (np.diagonal(corr_img), "diag. intensities"),
+        (mask, "flatfield correction mask"),
+    ]
 
 
 def example_fig(conn, data_list, channel, dataset_id):
     """
-        Creates a figure from the given data list and uploads it to the OMERO server.
+    Creates a figure from the given data list and uploads it to the OMERO server.
 
-        Parameters:
-        conn (BlitzGateway): Connection object to an OMERO server.
-        data_list (list): List of tuples, each containing an image or image data and a title for that image or data.
-        channel (dict): Dictionary containing channel information.
-        dataset_id (int): ID of the dataset on the OMERO server to which the figure should be attached.
+    Parameters:
+    conn (BlitzGateway): Connection object to an OMERO server.
+    data_list (list): List of tuples, each containing an image or image data and a title for that image or data.
+    channel (dict): Dictionary containing channel information.
+    dataset_id (int): ID of the dataset on the OMERO server to which the figure should be attached.
 
-        Returns:
-        None. The figure is saved to the OMERO server and linked to the specified dataset.
+    Returns:
+    None. The figure is saved to the OMERO server and linked to the specified dataset.
     """
     fig, ax = plt.subplots(1, 5, figsize=(20, 5))
     for i, data_tuple in enumerate(data_list):
         plt.sca(ax[i])
         if i in [0, 2, 4]:
-            plt.imshow(data_tuple[0], cmap='gray')
+            plt.imshow(data_tuple[0], cmap="gray")
         else:
             plt.plot(data_tuple[0])
             plt.ylim(0, 10 * data_tuple[0].min())
         plt.title(data_tuple[1])
- # save and close figure
+    # save and close figure
     fig_id = f"{channel[0]}_flatfield_check.pdf"  # using channel name
     fig.tight_layout()
 
     # Save the figure to a temporary file
     temp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
-    fig.savefig(temp_file.name, format='pdf')
+    fig.savefig(temp_file.name, format="pdf")
     plt.close(fig)
 
     # Assuming 'conn' is a BlitzGateway connection
     dataset = conn.getObject("Dataset", dataset_id)
 
     # Upload file to server
-    with open(temp_file.name, 'rb') as f:
+    with open(temp_file.name, "rb") as f:
         size = os.path.getsize(temp_file.name)
-        original_file = conn.createOriginalFileFromFileObj(f, fileSize=size, path="/", name=fig_id, mimetype='image/pdf')
+        original_file = conn.createOriginalFileFromFileObj(
+            f, fileSize=size, path="/", name=fig_id, mimetype="image/pdf"
+        )
 
     # Attach OriginalFile to Dataset as FileAnnotation
     file_ann = omero.model.FileAnnotationI()
@@ -285,17 +305,13 @@ def example_fig(conn, data_list, channel, dataset_id):
     os.unlink(temp_file.name)
 
 
-
-
-
-
 if __name__ == "__main__":
+
     @omero_connect
     def flatfield_test(conn=None):
         project_data = ProjectSetup(1237, conn)
         meta_data = MetaData(conn, 1237)
         return flatfieldcorr(meta_data, project_data, conn)
-
 
     flatfield_corr = flatfield_test()
     print(flatfield_corr.keys())

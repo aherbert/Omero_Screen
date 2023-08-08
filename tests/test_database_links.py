@@ -1,16 +1,23 @@
 import pytest
 import omero
 from omero.gateway import BlitzGateway
-from omero_screen.database_links import MetaData, create_project, create_dataset, link_project_dataset
+from omero_screen.metadata import (
+    MetaData,
+    create_project,
+    create_dataset,
+    link_project_dataset,
+)
 
-project_name = 'TestProject'
-dataset_name = 'Dataforplate_1'
+project_name = "TestProject"
+dataset_name = "Dataforplate_1"
+
+
 @pytest.fixture(scope="module")
 def conn():
-    HOST = 'localhost'
+    HOST = "localhost"
     PORT = 4064
-    USERNAME = 'root'
-    PASSWORD = 'omero'
+    USERNAME = "root"
+    PASSWORD = "omero"
 
     conn = BlitzGateway(USERNAME, PASSWORD, host=HOST, port=PORT)
     conn.connect()
@@ -23,14 +30,15 @@ def conn():
     project_names = [p.getName() for p in projects]
     if project_name in project_names:
         project_id = projects[project_names.index(project_name)].getId()
-        delete = omero.cmd.Delete2(targetObjects={'Project': [project_id]})
+        delete = omero.cmd.Delete2(targetObjects={"Project": [project_id]})
         conn.c.sf.submit(delete)
     datasets = list(conn.getObjects("Dataset"))
     dataset_names = [d.getName() for d in datasets]
     if dataset_name in dataset_names:
         dataset_id = datasets[dataset_names.index(dataset_name)].getId()
-        delete = omero.cmd.Delete2(targetObjects={'Dataset': [dataset_id]})
+        delete = omero.cmd.Delete2(targetObjects={"Dataset": [dataset_id]})
         conn.c.sf.submit(delete)
+
 
 def test_create_project_when_none_exists(conn):
     # Assert project does not exist initially
@@ -47,6 +55,7 @@ def test_create_project_when_none_exists(conn):
 
     # Assert project now exists
     assert project_name in project_names
+
 
 def test_create_project_when_exists(conn):
     # Assert project already exists
@@ -65,12 +74,12 @@ def test_create_project_when_exists(conn):
 
 
 def test_create_dataset(conn):
-    dataset_name = 'TestDataset'
+    dataset_name = "TestDataset"
 
     # Assert dataset does not exist initially
     datasets = list(conn.getObjects("Dataset"))
     dataset_names = [d.getName() for d in datasets]
-    #assert dataset_name not in dataset_names
+    # assert dataset_name not in dataset_names
 
     # Create dataset
     dataset_id = create_dataset(dataset_name, conn)
@@ -85,13 +94,14 @@ def test_create_dataset(conn):
     # Assert dataset now exists
     assert dataset_name in dataset_names
 
+
 def test_link_project_dataset(conn):
-    project_name = 'TestProject'
-    dataset_name = 'TestDataset'
+    project_name = "TestProject"
+    dataset_name = "TestDataset"
 
     # Get project and dataset
-    project = conn.getObject("Project", attributes={'name': project_name})
-    dataset = conn.getObject("Dataset", attributes={'name': dataset_name})
+    project = conn.getObject("Project", attributes={"name": project_name})
+    dataset = conn.getObject("Dataset", attributes={"name": dataset_name})
 
     # Assert they are not linked initially
     assert dataset not in project.listChildren()
@@ -100,17 +110,21 @@ def test_link_project_dataset(conn):
     link_project_dataset(conn, project.getId(), dataset.getId())
 
     # Assert they are linked now
-    project = conn.getObject("Project", attributes={'name': project_name})
+    project = conn.getObject("Project", attributes={"name": project_name})
     assert dataset in project.listChildren()
+
 
 def test_metadata(conn):
     # Create the MetaData object
     metadata = MetaData(1, conn)
 
     # Assert the extracted data
-    assert metadata.channels == {'DAPI': 0, 'Tub': 1, 'Alexa555': 2, 'EdU': 3}
+    assert metadata.channels == {"DAPI": 0, "Tub": 1, "Alexa555": 2, "EdU": 3}
     assert metadata.plate_length > 0  # Expecting some positive number
-    assert metadata.well_conditions(43) == {'cell_line': 'RPE-1', 'condition': 'NT 1000'}
+    assert metadata.well_conditions(43) == {
+        "cell_line": "RPE-1",
+        "condition": "NT 1000",
+    }
 
     # Assert the dataset has been created
     assert isinstance(metadata.data_set, int)

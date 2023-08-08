@@ -10,7 +10,6 @@ from omero_screen import Defaults
 from omero_screen.omero_functions import add_map_annotations, delete_map_annotations
 
 
-
 class MetaData:
     """Class to add the metadata to the plate."""
 
@@ -22,7 +21,6 @@ class MetaData:
         self.channels, self.well_inputs = self._get_metadata()
         self._set_well_inputs()
 
-
     def _get_metadata(self):
         """
         Get the metadata from the Excel file attached to the plate.
@@ -30,27 +28,33 @@ class MetaData:
         with the well data if the Excel file is found. Otherwise return none
         """
         file_anns = self.plate_obj.listAnnotations()
-
+        message = f"Loading metadata for {self.plate_obj.getName()}"
+        self.separator = "=" * len(message)
+        print(f"{self.separator}\n{message}")
         for ann in file_anns:
-            if isinstance(ann, FileAnnotationWrapper) and ann.getFile().getName().endswith(
-                    'metadata.xlsx'):
+            if isinstance(
+                ann, FileAnnotationWrapper
+            ) and ann.getFile().getName().endswith("metadata.xlsx"):
                 return self._get_channel_data_from_excel(ann)
 
         return self._get_channel_data_from_map()
 
     def _get_channel_data_from_map(self):
         annotations = self.plate_obj.listAnnotations()
-        map_annotations = [ann for ann in annotations if isinstance(ann, omero.gateway.MapAnnotationWrapper)]
+        map_annotations = [
+            ann
+            for ann in annotations
+            if isinstance(ann, omero.gateway.MapAnnotationWrapper)
+        ]
 
         for map_ann in map_annotations:
             map_data = dict(map_ann.getValue())
-            if 'DAPI' in map_data or 'Hoechst' in map_data:
+            if "DAPI" in map_data or "Hoechst" in map_data:
                 print("Found map annotation with 'DAPI' or 'Hoechst'")
                 key_value_data = map_ann.getValue()
                 return self._get_channel_data(key_value_data), None
 
         raise ValueError("No map annotation available and Excel file not found.")
-
 
     def _get_channel_data_from_excel(self, ann):
         self._clear_map_annotation()
@@ -59,32 +63,31 @@ class MetaData:
         with tempfile.NamedTemporaryFile(suffix=".xlsx") as tmp:
             self._download_file_to_tmp(original_file, tmp)
             data = pd.read_excel(tmp.name, sheet_name=None)
-        key_value_data = data['Sheet1'].astype(str).values.tolist()
+        key_value_data = data["Sheet1"].astype(str).values.tolist()
         add_map_annotations(self.plate_obj, key_value_data, conn=self.conn)
         channel_data = {row[0]: row[1] for row in key_value_data}
-        well_data = data['Sheet2']
+        well_data = data["Sheet2"]
         return self._get_channel_data(channel_data), well_data
 
     def _clear_map_annotation(self):
-        if map_ann := self.plate_obj.getAnnotation(Defaults['NS']):
+        if map_ann := self.plate_obj.getAnnotation(Defaults["NS"]):
             map_ann.setValue([])  # Set a new empty list
             map_ann.save()
 
     def _download_file_to_tmp(self, original_file, tmp):
-        with open(tmp.name, 'wb') as f:
+        with open(tmp.name, "wb") as f:
             for chunk in original_file.asFileObj():
                 f.write(chunk)
 
     def _get_channel_data(self, key_value_data):
         """"""
         channels = dict(key_value_data)
-        if 'Hoechst' in channels:
-            channels['DAPI'] = channels.pop('Hoechst')
+        if "Hoechst" in channels:
+            channels["DAPI"] = channels.pop("Hoechst")
         # changing channel number to integer type
         for key in channels:
             channels[key] = int(channels[key])
         return channels
-
 
     def _set_well_inputs(self):
         """Function to deal with the well metadata"""
@@ -94,7 +97,10 @@ class MetaData:
                 raise ValueError("Well metadata are not present")
         else:
             df = self.well_inputs
-            df_dict = {row['Well']: [[col, row[col]] for col in df.columns if col != 'Well'] for _, row in df.iterrows()}
+            df_dict = {
+                row["Well"]: [[col, row[col]] for col in df.columns if col != "Well"]
+                for _, row in df.iterrows()
+            }
             for well in self.plate_obj.listChildren():
                 # overwrite map annotation if present
                 delete_map_annotations(well, conn=self.conn)
@@ -103,13 +109,11 @@ class MetaData:
                     if wellname == key:
                         add_map_annotations(well, df_dict[key], conn=self.conn)
 
-
-
     def convert_well_names(self, well):
-        row_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'  # assuming no more than 26 rows
+        row_letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"  # assuming no more than 26 rows
         row_number = well.row
         column_number = well.column + 1
-        return f'{row_letters[row_number]}{column_number}'
+        return f"{row_letters[row_number]}{column_number}"
 
     def _found_cell_line(self):
         """
@@ -122,9 +126,13 @@ class MetaData:
 
         well_list = []
         for well in plate.listChildren():
-            annotations = [ann for ann in well.listAnnotations() if isinstance(ann, MapAnnotationWrapper)]
+            annotations = [
+                ann
+                for ann in well.listAnnotations()
+                if isinstance(ann, MapAnnotationWrapper)
+            ]
             found_cell_line = any(
-                'cell_line' in dict(ann.getValue()) for ann in annotations
+                "cell_line" in dict(ann.getValue()) for ann in annotations
             )
 
             if not found_cell_line:
@@ -140,8 +148,9 @@ class MetaData:
     def well_conditions(self, current_well):
         """Method to get the well conditions from the well metadata"""
         well = self.conn.getObject("Well", current_well)
-        ann = well.getAnnotation(Defaults['NS'])
+        ann = well.getAnnotation(Defaults["NS"])
         return dict(ann.getValue())
+
 
 class ProjectSetup:
     """Class to set up the Omero-Screen project and organise the metadata"""
@@ -154,11 +163,10 @@ class ProjectSetup:
         self._link_project_dataset()
 
     def _create_project(self):
-
         """Check for a Screen project to store the linked data set, if not present, create it."""
 
         # Fetch all projects
-        project_name = 'Screens'
+        project_name = "Screens"
         projects = list(self.conn.getObjects("Project"))
         project_names = [p.getName() for p in projects]
 
@@ -174,14 +182,14 @@ class ProjectSetup:
             # Create a new project
             project = omero.model.ProjectI()
             project.setName(rstring(project_name))
-            project.setDescription(rstring('This is a description'))
+            project.setDescription(rstring("This is a description"))
 
             # Save the project
             update_service = self.conn.getUpdateService()
             saved_project = update_service.saveAndReturnObject(project)
             project_id = saved_project.getId().getValue()
 
-        print('Project ID:', project_id)
+        print("Project ID:", project_id)
 
         return project_id
 
@@ -225,6 +233,7 @@ class ProjectSetup:
         link.setParent(omero.model.ProjectI(self.project_id, False))
         self.conn.getUpdateService().saveObject(link)
         print("Link created")
+
 
 #
 # class MetaData:
@@ -309,6 +318,5 @@ if __name__ == "__main__":
         plate = conn.getObject("Plate", 1237)
         for well in plate.listChildren():
             print(instance.well_conditions(well.getId()))
-
 
     systems_test()

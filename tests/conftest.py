@@ -5,7 +5,9 @@ import pytest
 import omero
 from omero.gateway import BlitzGateway
 
+PLATE_ID = 2
 # Other imports needed for your tests...
+
 
 def delete_map_annotations(omero_object, conn=None):
     """
@@ -15,11 +17,16 @@ def delete_map_annotations(omero_object, conn=None):
     """
 
     # Get all map annotations of the object
-    map_annotations = [ann for ann in omero_object.listAnnotations()
-                       if isinstance(ann, omero.gateway.MapAnnotationWrapper)]
+    map_annotations = [
+        ann
+        for ann in omero_object.listAnnotations()
+        if isinstance(ann, omero.gateway.MapAnnotationWrapper)
+    ]
     # Delete map annotations
 
-    delete = omero.cmd.Delete2(targetObjects={'MapAnnotation': [ann.getId() for ann in map_annotations]})
+    delete = omero.cmd.Delete2(
+        targetObjects={"MapAnnotation": [ann.getId() for ann in map_annotations]}
+    )
     handle = conn.c.sf.submit(delete)
     time.sleep(0.5)
     handle.close()
@@ -29,10 +36,13 @@ def attach_excel_file(plate_obj, file_path, omero_conn):
     file = Path(file_path)
     file_size = file.stat().st_size
     file_name = file.name
-    with file.open('rb') as file_data:
+    with file.open("rb") as file_data:
         original_file = omero_conn.createOriginalFileFromFileObj(
-            file_data, path=None, name=file_name, fileSize=file_size,
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            file_data,
+            path=None,
+            name=file_name,
+            fileSize=file_size,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
     file_ann = omero.gateway.FileAnnotationWrapper(omero_conn)
     file_ann.setNs(omero.rtypes.rstring("omero.constants.namespaces.NSAUTOCOMPLETE"))
@@ -60,10 +70,13 @@ def load_data(plate_id, filepath, conn=None):
     # Upload the file
     try:
         # Open and upload the file
-        with file.open('rb') as file_data:
+        with file.open("rb") as file_data:
             original_file = conn.createOriginalFileFromFileObj(
-                file_data, path=None, name=file_name, fileSize=file_size,
-                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                file_data,
+                path=None,
+                name=file_name,
+                fileSize=file_size,
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
     except FileNotFoundError:
         print(f"File not found: {filepath}")
@@ -90,21 +103,25 @@ def delete_excel_attachments(plate_id, conn):
     """
     # Get the Plate object
     plate = conn.getObject("Plate", plate_id)
-    file_annotations = [ann for ann in plate.listAnnotations()
-                        if isinstance(ann, omero.gateway.FileAnnotationWrapper)]
-    excel_annotations = [ann for ann in file_annotations
-                         if
-                         ann.getFile().getMimetype() == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
+    file_annotations = [
+        ann
+        for ann in plate.listAnnotations()
+        if isinstance(ann, omero.gateway.FileAnnotationWrapper)
+    ]
+    excel_annotations = [
+        ann
+        for ann in file_annotations
+        if ann.getFile().getMimetype()
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    ]
     # Delete Excel file annotations
 
-    delete = omero.cmd.Delete2(targetObjects={'FileAnnotation': [ann.getId() for ann in excel_annotations]})
+    delete = omero.cmd.Delete2(
+        targetObjects={"FileAnnotation": [ann.getId() for ann in excel_annotations]}
+    )
     handle = conn.c.sf.submit(delete)
     time.sleep(0.5)
     handle.close()
-
-
-
-
 
 
 def delete_object(conn, object_type, object_id):
@@ -115,15 +132,10 @@ def delete_object(conn, object_type, object_id):
     conn.c.sf.submit(delete)
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def omero_conn():
     # Create a connection to the omero server
-    conn = BlitzGateway(
-        'root',
-        'omero',
-        host='localhost',
-        port=4064
-    )
+    conn = BlitzGateway("root", "omero", host="localhost", port=4064)
 
     conn.connect()
 
@@ -141,4 +153,3 @@ def omero_conn():
     # After the tests are done, disconnect
     conn.close()
     print("Closed connection to OMERO server")
-

@@ -2,13 +2,15 @@ import pytest
 from omero.gateway import BlitzGateway
 from omero.rtypes import rstring
 from omero.gateway import DatasetWrapper
-from omero_screen.database_links import MetaData, ProjectSetup
+from omero_screen.metadata import MetaData, ProjectSetup
 from tests.conftest import delete_object
+
 
 def test_connection(omero_conn):
     plate = omero_conn.getObject("Plate", 2)
-    print (plate.id)
+    print(plate.id)
     assert plate.getName() == "test_plate01"
+
 
 def test_add_metadata(omero_conn):
     metadata = MetaData(omero_conn, 2)
@@ -24,7 +26,7 @@ def test_project_setup(omero_conn):
     setup = ProjectSetup(omero_conn, plate_id)
     project = omero_conn.getObject("Project", setup.project_id)
     dataset = omero_conn.getObject("Dataset", setup.dataset_id)
-    assert project.getName() == 'Screens'
+    assert project.getName() == "Screens"
     assert dataset.getName() == str(plate_id)
 
     # Check if the dataset is linked to the project

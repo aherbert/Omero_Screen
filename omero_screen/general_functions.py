@@ -12,7 +12,14 @@ import random
 import getpass
 
 
-def save_fig(path: pathlib, fig_id: str, tight_layout=True, fig_extension="pdf", resolution=300) -> None:
+def save_fig(
+    fig,
+    fig_id: str,
+    path: pathlib,
+    tight_layout=True,
+    fig_extension="png",
+    resolution=300,
+) -> None:
     """
     coherent saving of matplotlib figures as pdfs (default)
     :param path: path for saving
@@ -25,7 +32,7 @@ def save_fig(path: pathlib, fig_id: str, tight_layout=True, fig_extension="pdf",
     dest = path / f"{fig_id}.{fig_extension}"
     # print("Saving figure", fig_id)
     if tight_layout:
-        plt.tight_layout()
+        fig.tight_layout()
     plt.savefig(dest, format=fig_extension, dpi=resolution)
 
 
@@ -39,22 +46,22 @@ def omero_connect(func):
     @functools.wraps(func)
     def wrapper_omero_connect(*args, **kwargs):
         try:
-            with open('../data/secrets/config.json') as file:
+            with open("../data/secrets/config.json") as file:
                 data = json.load(file)
-            username = data['username']
-            password = data['password']
+            username = data["username"]
+            password = data["password"]
         except IOError:
             username = input("Username: ")
-            password = getpass.getpass(prompt='Password: ')
+            password = getpass.getpass(prompt="Password: ")
         conn = BlitzGateway(username, password, host="ome2.hpc.sussex.ac.uk")
         value = None
         try:
-            print('Connecting to Omero')
+            print("Connecting to Omero")
             if conn.connect():
                 value = func(*args, **kwargs, conn=conn)
-                print('Disconnecting from Omero')
+                print("Disconnecting from Omero")
             else:
-                print(f'Failed to connect to Omero: {conn.getLastError()}')
+                print(f"Failed to connect to Omero: {conn.getLastError()}")
         finally:
             # No side effects if called without a connection
 
@@ -63,6 +70,7 @@ def omero_connect(func):
         return value
 
     return wrapper_omero_connect
+
 
 def omero_connect_test(func):
     """
@@ -74,22 +82,22 @@ def omero_connect_test(func):
     @functools.wraps(func)
     def wrapper_omero_connect(*args, **kwargs):
         try:
-            with open('../data/secrets/config_test.json') as file:
+            with open("../data/secrets/config_test.json") as file:
                 data = json.load(file)
-            username = data['username']
-            password = data['password']
+            username = data["username"]
+            password = data["password"]
         except IOError:
             username = input("Username: ")
-            password = getpass.getpass(prompt='Password: ')
+            password = getpass.getpass(prompt="Password: ")
         conn = BlitzGateway(username, password, host="localhost")
         value = None
         try:
-            print('Connecting to Omero')
+            print("Connecting to Omero")
             if conn.connect():
                 value = func(*args, **kwargs, conn=conn)
-                print('Disconnecting from Omero')
+                print("Disconnecting from Omero")
             else:
-                print(f'Failed to connect to Omero: {conn.getLastError()}')
+                print(f"Failed to connect to Omero: {conn.getLastError()}")
         finally:
             # No side effects if called without a connection
 
@@ -98,6 +106,8 @@ def omero_connect_test(func):
         return value
 
     return wrapper_omero_connect
+
+
 def time_it(func):
     """
     decorator to time functions
@@ -142,7 +152,9 @@ def generate_random_image(well: str, channel: dict) -> np.ndarray:
     :return: an numpy ndarray from generate image function
     """
     index = well.countWellSample()
-    random_img_num = random.randint(0, index - 1)  # to select random image for flatfield test
+    random_img_num = random.randint(
+        0, index - 1
+    )  # to select random image for flatfield test
     random_image = well.getImage(random_img_num)
     return generate_image(random_image, channel[1])
 
@@ -154,7 +166,7 @@ def color_label(mask: np.ndarray, img: np.ndarray) -> np.ndarray:
     :param img:
     :return: color labels for matplotlib
     """
-    return color.label2rgb(mask, img, alpha=0.4, bg_label=0, kind='overlay')
+    return color.label2rgb(mask, img, alpha=0.4, bg_label=0, kind="overlay")
 
 
 def filter_segmentation(mask: np.ndarray) -> np.ndarray:
@@ -165,7 +177,7 @@ def filter_segmentation(mask: np.ndarray) -> np.ndarray:
     """
     cleared = clear_border(mask)
     sizes = np.bincount(cleared.ravel())
-    mask_sizes = (sizes > 10)
+    mask_sizes = sizes > 10
     mask_sizes[0] = 0
     cells_cleaned = mask_sizes[cleared]
     return cells_cleaned * mask
