@@ -237,7 +237,7 @@ class ImageProperties:
         cond_list = [
             self.plate_name,
             self._meta_data.plate_obj.getId(),
-            self._image.well_pos,
+            self._well.getWellPos(),
             self._well_id,
             self._image.omero_image.getId(),
         ]

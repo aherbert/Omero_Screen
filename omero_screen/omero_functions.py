@@ -40,7 +40,7 @@ def load_fig(fig, omero_obj, title, conn):
 
                 # Link the file annotation to the plate
                 omero_obj.linkAnnotation(file_ann)
-                print(f"Uploading {title} to {omero_obj.getName()}")
+                print(f"Uploading Image {title}")
         except Exception as e:
             print(f"An error occurred while uploading the file: {e}")
 
@@ -156,11 +156,11 @@ def delete_excel_attachments(plate_id, conn=None):
         print("Unknown error occurred during deletion")
 
 
-def delete_final_data(plate, conn):
+def delete_annotations(omero_obj, conn):
     # Get all file annotations
     file_annotations = [
         ann
-        for ann in plate.listAnnotations()
+        for ann in omero_obj.listAnnotations()
         if isinstance(ann, omero.gateway.FileAnnotationWrapper)
     ]
 

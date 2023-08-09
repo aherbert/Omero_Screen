@@ -19,6 +19,7 @@ def save_fig(
     tight_layout=True,
     fig_extension="png",
     resolution=300,
+    transparent=False,
 ) -> None:
     """
     coherent saving of matplotlib figures as pdfs (default)
@@ -33,7 +34,7 @@ def save_fig(
     # print("Saving figure", fig_id)
     if tight_layout:
         fig.tight_layout()
-    plt.savefig(dest, format=fig_extension, dpi=resolution)
+    plt.savefig(dest, format=fig_extension, dpi=resolution, transparent=transparent)
 
 
 def omero_connect(func):
