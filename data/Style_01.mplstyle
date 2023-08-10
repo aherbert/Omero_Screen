@@ -10,7 +10,8 @@ axes.edgecolor:   black
 
 # Set custom colors. All colors are in web style hex format.
 
-axes.prop_cycle: cycler('color', ['000000', '1f77b4', 'ff7f0e', '2ca02c', 'd62728', '9467bd', '8c564b', 'e377c2', '7f7f7f', 'bcbd22', '17becf'])
+# axes.prop_cycle: cycler('color', ['000000', '1f77b4', 'ff7f0e', '2ca02c', 'd62728', '9467bd', '8c564b', 'e377c2', '7f7f7f', 'bcbd22', '17becf'])
+axes.prop_cycle: cycler('color', ["1B365D", "e04f39", "006ba6","64ccc9", "ffc845", "7da1c4", "be84a3", "007a78", "59315f"])
 
 
 

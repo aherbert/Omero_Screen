@@ -1,6 +1,6 @@
 from omero_screen.loops import plate_loop
-import omero
-from omero_screen.omero_functions import delete_map_annotations
+from omero_screen.metadata import ProjectSetup
+from omero_screen.omero_functions import delete_annotations
 from tests.conftest import attach_excel_file, delete_excel_attachments, delete_object
 from conftest import PLATE_ID as plate_id
 
@@ -19,6 +19,7 @@ def test_plate_loop_wellimg(omero_conn):
     """Test the Image Class when no data are present on the server"""
     # load metadata excel file
     plate_obj = omero_conn.getObject("Plate", plate_id)
+    project_setup = ProjectSetup(plate_id, omero_conn)
     well_list = list(plate_obj.listChildren())
     for well in well_list:
         file_names = [ann.getFile().getName() for ann in well.listAnnotations()]
@@ -27,3 +28,9 @@ def test_plate_loop_wellimg(omero_conn):
         assert any(
             name.endswith(".png") for name in file_names
         ), f"Missing PNG file for well {well.getId()}"
+    print("tearing down annotations")
+    delete_annotations(plate_obj, omero_conn)
+    for well in plate_obj.listChildren():
+        delete_annotations(well, omero_conn)
+    delete_object(omero_conn, "Dataset", project_setup.dataset_id)
+    delete_object(omero_conn, "Project", project_setup.project_id)

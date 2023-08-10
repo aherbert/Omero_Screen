@@ -11,7 +11,7 @@ from omero_screen.general_functions import save_fig
 STYLE = Path("../data/Style_01.mplstyle")
 plt.style.use(STYLE)
 prop_cycle = plt.rcParams["axes.prop_cycle"]
-colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+colors = prop_cycle.by_key()["color"]
 
 
 norm_colums = (
@@ -252,11 +252,16 @@ def prop_pivot(df: pd.DataFrame, well, H3):
         cc_phases = ["Sub-G1", "G1", "S", "G2", "M", "Polyploid"]
     else:
         cc_phases = ["Sub-G1", "G1", "S", "G2/M", "Polyploid"]
+
     df_prop1 = df_prop.loc[
         df_prop["well"] == well, ["well", "cell_cycle", "percent"]
     ].pivot_table(columns=["cell_cycle"], index=["well"])
     df_prop1.columns = df_prop1.columns.droplevel(0)
-    return df_prop1[cc_phases]
+
+    # Reindex the DataFrame to include all cell cycle phases and fill missing values with 0
+    df_prop1 = df_prop1.reindex(columns=cc_phases, fill_value=0)
+
+    return df_prop1
 
 
 def plot_histogram(ax, data):

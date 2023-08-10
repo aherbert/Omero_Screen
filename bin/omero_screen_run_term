@@ -2,29 +2,30 @@
 
 import argparse
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Program to run Omero Screen for the screen ID.")
-    parser.add_argument('ID', type=int)
-    group = parser.add_argument_group('Omero Screen overrides')
-    group.add_argument('-r', '--dir', dest='dir',
-      help="Results directory")
-    group.add_argument('-f', '--file', dest='file',
-      help="Results summary file")
-    group.add_argument('-d', '--debug', dest='debug', action='store_true',
-      help="Debug mode")
+        description="Program to run Omero Screen for the screen ID."
+    )
+    parser.add_argument("ID", type=int)
+    group = parser.add_argument_group("Omero Screen overrides")
+    group.add_argument("-r", "--dir", dest="dir", help="Results directory")
+    group.add_argument("-f", "--file", dest="file", help="Results summary file")
+    group.add_argument(
+        "-d", "--debug", dest="debug", action="store_true", help="Debug mode"
+    )
 
     args = parser.parse_args()
 
     # Create overrides
-    opt = dict()
+    opt = {}
     if args.dir is not None:
-      opt['DEFAULT_DEST_DIR'] = args.dir
+        opt["DEFAULT_DEST_DIR"] = args.dir
     if args.file is not None:
-      opt['DEFAULT_SUMMARY_FILE'] = args.file
+        opt["DEFAULT_SUMMARY_FILE"] = args.file
     if args.debug:
-      opt['DEBUG'] = True
+        opt["DEBUG"] = True
 
     # lazy import to speed up parsing errors
     import omero_screen.main
+
     omero_screen.main.main(args.ID, options=opt)
