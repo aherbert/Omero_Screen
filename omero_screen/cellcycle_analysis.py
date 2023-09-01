@@ -227,12 +227,8 @@ def cellcycle_prop(df: pd.DataFrame, cell_cycle: str = "cell_cycle") -> pd.DataF
     :return: grouped dataframe with cell cycle proportions
     """
     df_ccphase = (
-        df.groupby(["plate_id", "well", "cell_line", "condition", cell_cycle])[
-            "experiment"
-        ].count()
-        / df.groupby(["plate_id", "well", "cell_line", "condition"])[
-            "experiment"
-        ].count()
+        df.groupby(["plate_id", "well", "cell_line", cell_cycle])["experiment"].count()
+        / df.groupby(["plate_id", "well", "cell_line"])["experiment"].count()
         * 100
     )
     return df_ccphase.reset_index().rename(columns={"experiment": "percent"})
@@ -243,7 +239,6 @@ def prop_pivot(df: pd.DataFrame, well, H3):
     Function to pivot the cell cycle proportion dataframe and get the mean and std of each cell cycle phase
     This will be the input to plot the stacked barplots with errorbars.
     :param df_prop: dataframe from cellcycle_prop function
-    :param conditions: list of conditions sort the order of data
     :param H3: boolean, default False, if True the function will use M phase instead of G2/M based on H3 staining
     :return: dataframe to submit to the barplot function
     """
