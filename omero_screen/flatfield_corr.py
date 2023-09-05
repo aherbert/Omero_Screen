@@ -176,7 +176,10 @@ def generate_corr_dict(plate, channels, conn, dataset_id):
         example = gen_example(img_list, channel, norm_mask, conn)
         example_fig(conn, example, channel, dataset_id)
         corr_dict[channel[0]] = norm_mask  # associates channel name with flatfield mask
-    return corr_dict
+    sorted_corr_dict = {
+        k: corr_dict[k] for k, v in sorted(channels.items(), key=lambda item: item[1])
+    }
+    return sorted_corr_dict
 
 
 def random_imgs(plate):

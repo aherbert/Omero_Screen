@@ -11,4 +11,4 @@ def main(plate_id, options=None, conn=None):
 
 
 if __name__ == "__main__":
-    main(3)
+    main(1398)
