@@ -88,6 +88,7 @@ def upload_images(conn, dataset, image_name, image_dict):
     """
     array_list = []
     channel_names = list(image_dict.keys())  # get channel names
+    channel_number = len(channel_names)  # get number of channels
     for array in image_dict.values():
         # Wrap the array in a generato
         array_list.append(array)
@@ -98,7 +99,7 @@ def upload_images(conn, dataset, image_name, image_dict):
 
     # Create the image in the dataset
     image = conn.createImageFromNumpySeq(
-        plane_gen(), image_name, 1, 4, 1, dataset=dataset
+        plane_gen(), image_name, 1, channel_number, 1, dataset=dataset
     )
     print(f"Created image with ID: {image.getId()}")
     # Create a dictionary of channel names

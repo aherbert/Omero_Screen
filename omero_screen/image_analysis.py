@@ -75,7 +75,10 @@ class Image:
         :param number: int 0 or 1, 0 for nuclei model, 1 for cell model
         :return: path to model (str)
         """
-        return Defaults["MODEL_DICT"][self.cell_line.replace(" ", "").upper()]
+        if self.cell_line in Defaults["MODEL_DICT"]:
+            return Defaults["MODEL_DICT"][self.cell_line.replace(" ", "").upper()]
+        else:
+            return Defaults["MODEL_DICT"]["U2OS"]
 
     def _n_segmentation(self):
         """perform cellpose segmentation using nuclear mask"""
