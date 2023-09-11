@@ -54,7 +54,7 @@ def omero_connect(func):
         except IOError:
             username = input("Username: ")
             password = getpass.getpass(prompt="Password: ")
-        conn = BlitzGateway(username, password, host="ome2.hpc.sussex.ac.uk")
+        conn = BlitzGateway(username, password, host="localhost")
         value = None
         try:
             print("Connecting to Omero")
