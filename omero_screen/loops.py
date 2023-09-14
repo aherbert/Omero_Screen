@@ -64,9 +64,9 @@ def plate_loop(plate_id: int, conn: BlitzGateway) -> Tuple[pd.DataFrame, pd.Data
     )
     if "EdU" in metadata.channels.keys():
         df_final = cellcycle_analysis(df_final)
+        wells = list(metadata.plate_obj.listChildren())
+        add_welldata(wells, df_final, conn)
     save_results(df_final, df_quality_control, metadata, plate_name, conn)
-    wells = list(metadata.plate_obj.listChildren())
-    add_welldata(wells, df_final, conn)
     return df_final, df_quality_control
 
 
