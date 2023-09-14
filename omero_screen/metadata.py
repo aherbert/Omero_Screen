@@ -313,10 +313,12 @@ if __name__ == "__main__":
 
     @omero_connect
     def systems_test(conn=None):
-        instance = MetaData(conn, plate_id=1237)
-        print(instance.channels)
-        plate = conn.getObject("Plate", 1237)
-        for well in plate.listChildren():
-            print(instance.well_conditions(well.getId()))
+        plate = conn.getObject("Plate", 51)
+        print(plate.getName())
+        # instance = MetaData(conn, plate_id=51)
+        # print(instance.channels)
+        # plate = conn.getObject("Plate", 51)
+        # for well in plate.listChildren():
+        #     print(instance.well_conditions(well.getId()))
 
     systems_test()

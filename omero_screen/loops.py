@@ -160,10 +160,9 @@ def add_welldata(wells, df_final, conn):
     :param conn: Connection to OMERO
     :param df_final: DataFrame containing the final data
     """
-    df_cc = cellcycle_analysis(df_final)
     for well in wells:
         well_pos = well.getWellPos()
-        fig = combplot(df_cc, well_pos)
+        fig = combplot(df_final, well_pos)
         delete_annotations(well, conn)
         load_fig(fig, well, well_pos, conn)
 
