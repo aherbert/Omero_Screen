@@ -279,3 +279,19 @@ def upload_masks(dataset_id, omero_image, array_list, conn):
 
     map_ann.save()
     omero_image.linkAnnotation(map_ann)
+
+
+def create_object(conn, obj_type, name, description=None):
+    if obj_type == "Project":
+        obj = omero.model.ProjectI()
+    elif obj_type == "Dataset":
+        obj = omero.model.DatasetI()
+    else:
+        print("Unsupported object type.")
+        return None
+
+    obj.setName(omero.rtypes.rstring(name))
+    if description:
+        obj.setDescription(omero.rtypes.rstring(description))
+
+    return conn.getUpdateService().saveAndReturnObject(obj)
