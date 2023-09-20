@@ -38,7 +38,7 @@ class MetaData:
         for ann in file_anns:
             if isinstance(
                 ann, FileAnnotationWrapper
-            ) and ann.getFile().getName().endswith("metadata.xlsx"):
+            ) and ann.getFile().getName().endswith(".xlsx"):
                 return self._get_channel_data_from_excel(ann)
 
         return self._get_channel_data_from_map()
