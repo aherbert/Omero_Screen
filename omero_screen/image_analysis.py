@@ -64,9 +64,7 @@ class Image:
                 / self._flatfield_dict[channel[0]]
             )
             # bgcorr_img = corr_img - np.percentile(corr_img, 0.2) +1
-            img_dict[channel[0]] = corr_img[
-                30:1050, 30:1050
-            ]  # cropping the image to avoid flat field corr problems at the border
+            img_dict[channel[0]] = corr_img
         return img_dict
 
     def _get_models(self):

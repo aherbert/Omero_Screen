@@ -63,9 +63,7 @@ class NucImage:
                 generate_image(self.omero_image, channel[1])
                 / self._flatfield_dict[channel[0]]
             )
-            img_dict[channel[0]] = corr_img[
-                30:1050, 30:1050
-            ]  # cropping the image to avoid flat field corr problems at the border
+            img_dict[channel[0]] = corr_img
         return img_dict
 
     def _download_masks(self, image_id):

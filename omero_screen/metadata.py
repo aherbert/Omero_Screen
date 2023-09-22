@@ -86,12 +86,13 @@ class MetaData:
     def _get_channel_data(self, key_value_data):
         """"""
         channels = dict(key_value_data)
-        if "Hoechst" in channels:
-            channels["DAPI"] = channels.pop("Hoechst")
+        cleaned_channels = {key.strip(): value for key, value in channels.items()}
+        if "Hoechst" in cleaned_channels:
+            cleaned_channels["DAPI"] = cleaned_channels.pop("Hoechst")
         # changing channel number to integer type
-        for key in channels:
-            channels[key] = int(channels[key])
-        return channels
+        for key in cleaned_channels:
+            cleaned_channels[key] = int(cleaned_channels[key])
+        return cleaned_channels
 
     def _set_well_inputs(self):
         """Function to deal with the well metadata"""
@@ -221,7 +222,7 @@ class ProjectSetup:
         else:
             new_dataset = create_object(self.conn, "Dataset", self.plate_id)
             new_dataset_id = new_dataset.getId()
-            print(f"Project created with ID: {new_dataset_id}")
+            print(f"Dataset created with ID: {new_dataset_id}")
             return new_dataset_id
 
     def _link_project_dataset(self):

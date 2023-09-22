@@ -30,7 +30,9 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict):
             image = Image(conn, well, omero_img, metadata, project_data, flatfield_dict)
             image_data = ImageProperties(well, image, metadata)
         else:
-            image = NucImage(well, omero_img, metadata, project_data, flatfield_dict)
+            image = NucImage(
+                conn, well, omero_img, metadata, project_data, flatfield_dict
+            )
             image_data = NucImageProperties(well, image, metadata)
         df_image = image_data.image_df
         df_image_quality = image_data.quality_df

@@ -176,7 +176,7 @@ def filter_segmentation(mask: np.ndarray) -> np.ndarray:
     :param mask: unfiltered segmentation mask
     :return: filtered segmentation mask
     """
-    cleared = clear_border(mask)
+    cleared = clear_border(mask, buffer_size=5)
     sizes = np.bincount(cleared.ravel())
     mask_sizes = sizes > 10
     mask_sizes[0] = 0
