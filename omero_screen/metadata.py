@@ -164,39 +164,38 @@ class ProjectSetup:
         self.conn = conn
         self.user_id = self.conn.getUser().getId()
         self.plate_id = plate_id
-        self.project_id = self._create_project()
         self.dataset_id = self._create_dataset()
         self._link_project_dataset()
 
-    def _create_project(self):
-        """Check for a Screen project to store the linked data set, if not present, create it."""
-
-        # Fetch all projects
-        project_name = "Screens"
-        projects = list(
-            self.conn.getObjects(
-                "Project",
-                opts={"owner": self.user_id},
-                attributes={"name": project_name},
-            )
-        )
-
-        project_count = len(projects)
-        if project_count > 1:
-            raise Exception(
-                f"Data integrity issue: Multiple projects found with the same name '{project_name}' for user ID {self.user_id}"
-            )
-
-        elif project_count == 1:
-            project_id = projects[0].getId()  # The only match
-            print(f"Project exists with ID: {project_id}")
-            return project_id
-
-        else:
-            new_project = create_object(self.conn, "Project", project_name)
-            new_project_id = new_project.getId()
-            print(f"Project created with ID: {new_project_id}")
-            return new_project_id
+    # def _create_project(self):
+    #     """Check for a Screen project to store the linked data set, if not present, create it."""
+    #
+    #     # Fetch all projects
+    #     project_name = "Screens"
+    #     projects = list(
+    #         self.conn.getObjects(
+    #             "Project",
+    #             opts={"owner": self.user_id},
+    #             attributes={"name": project_name},
+    #         )
+    #     )
+    #
+    #     project_count = len(projects)
+    #     if project_count > 1:
+    #         raise Exception(
+    #             f"Data integrity issue: Multiple projects found with the same name '{project_name}' for user ID {self.user_id}"
+    #         )
+    #
+    #     elif project_count == 1:
+    #         project_id = projects[0].getId()  # The only match
+    #         print(f"Project exists with ID: {project_id}")
+    #         return project_id
+    #
+    #     else:
+    #         new_project = create_object(self.conn, "Project", project_name)
+    #         new_project_id = new_project.getId()
+    #         print(f"Project created with ID: {new_project_id}")
+    #         return new_project_id
 
     def _create_dataset(self):
         """Create a new dataset."""
@@ -228,10 +227,12 @@ class ProjectSetup:
     def _link_project_dataset(self):
         """Link a project and a dataset."""
         # Fetch the project
-        project = self.conn.getObject("Project", self.project_id)
-        if not project:
-            print("Project not found")
-            return
+        try:
+            project = self.conn.getObject("Project", Defaults["PROJECT_ID"])
+        except Exception as e:
+            raise Exception(
+                f"Project with ID {Defaults['PROJECT_ID']} not found"
+            ) from e
 
         # Iterate over linked datasets to check if our dataset is already linked
         for dataset in project.listChildren():
@@ -242,6 +243,6 @@ class ProjectSetup:
         # If we reach here, it means the dataset is not linked to the project. So, create a new link.
         link = omero.model.ProjectDatasetLinkI()
         link.setChild(omero.model.DatasetI(self.dataset_id, False))
-        link.setParent(omero.model.ProjectI(self.project_id, False))
+        link.setParent(omero.model.ProjectI(Defaults["PROJECT_ID"], False))
         self.conn.getUpdateService().saveObject(link)
         print("Link created")
