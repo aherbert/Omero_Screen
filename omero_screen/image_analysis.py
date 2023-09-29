@@ -80,15 +80,9 @@ class Image:
 
     def _n_segmentation(self):
         """perform cellpose segmentation using nuclear mask"""
-        if torch.cuda.is_available():
-            segmentation_model = models.CellposeModel(
-                gpu=True, model_type=Defaults["MODEL_DICT"]["nuclei"]
-            )
-        else:
-            segmentation_model = models.CellposeModel(
-                gpu=True, model_type=Defaults["MODEL_DICT"]["nuclei"]
-            )
-
+        segmentation_model = models.CellposeModel(
+            gpu=torch.cuda.is_available(), model_type=Defaults["MODEL_DICT"]["nuclei"]
+        )
         n_channels = [[0, 0]]
         n_mask_array, n_flows, n_styles = segmentation_model.eval(
             self.img_dict["DAPI"], channels=n_channels
@@ -97,14 +91,9 @@ class Image:
 
     def _c_segmentation(self):
         """perform cellpose segmentation using cell mask"""
-        if torch.cuda.is_available():
-            segmentation_model = models.CellposeModel(
-                gpu=True, model_type=self._get_models()
-            )
-        else:
-            segmentation_model = models.CellposeModel(
-                gpu=True, model_type=self._get_models()
-            )
+        segmentation_model = models.CellposeModel(
+            gpu=torch.cuda.is_available(), model_type=self._get_models()
+        )
         c_channels = [[2, 1]]
         # combine the 2 channel numpy array for cell segmentation with the nuclei channel
         comb_image = np.dstack([self.img_dict["DAPI"], self.img_dict["Tub"]])
