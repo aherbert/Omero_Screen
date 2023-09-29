@@ -13,6 +13,7 @@ def create_job_script(args):
   omero_screen_prog = 'omero_screen_run_term'
   conda_module = 'Anaconda3/2022.05'
   send_mail = 'send-mail.py'
+  torch_test = 'torch-test.py'
 
   if not os.path.isfile(omero_screen_prog):
     raise Exception(f'Missing program: {omero_screen_prog}')
@@ -93,6 +94,22 @@ def create_job_script(args):
       runcmd conda activate {conda_env}
       '''.format(run=run, comment=comment, conda_module=conda_module,
                  conda_env=args.env)), file=f)
+    # Test for gpu
+    if args.gpu:
+      print(inspect.cleandoc('''
+        set +e
+        runcmd python {torch_test}
+        if [ $? -ne 0 ]; then
+          code=$?
+          msg Torch test exit code: $code
+          python {send_mail} -m "{msg}" -s "{subject}" {username}@sussex.ac.uk
+          exit $code
+        fi
+        set -e
+        '''.format(torch_test=torch_test, send_mail=send_mail,
+                   msg=f'Torch GPU unavailable for {script}',
+                   subject=f'{script} failed',
+                   username=args.username)), file=f);
     for id in set(args.ID):
       debug_flag = '--debug' if args.debug else ''
       print(f'runcmd python {omero_screen_prog} -r {results_dir} '\
