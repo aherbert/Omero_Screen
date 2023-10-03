@@ -13,7 +13,12 @@ if __name__ == "__main__":
     group.add_argument(
         "-d", "--debug", dest="debug", action="store_true", help="Debug mode"
     )
-
+    group.add_argument(
+        "--gpu",
+        dest="gpu",
+        action="store_true",
+        help="add non cuda GPU option to Cellpose",
+    )
     args = parser.parse_args()
 
     # Create overrides
@@ -24,6 +29,8 @@ if __name__ == "__main__":
         opt["DEFAULT_SUMMARY_FILE"] = args.file
     if args.debug:
         opt["DEBUG"] = True
+    if args.gpu:
+        opt["GPU"] = "GPU"
 
     # lazy import to speed up parsing errors
     import omero_screen.main

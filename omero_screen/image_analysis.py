@@ -81,7 +81,8 @@ class Image:
     def _n_segmentation(self):
         """perform cellpose segmentation using nuclear mask"""
         segmentation_model = models.CellposeModel(
-            gpu=torch.cuda.is_available(), model_type=Defaults["MODEL_DICT"]["nuclei"]
+            gpu=True if Defaults["GPU"] else torch.cuda.is_available(),
+            model_type=Defaults["MODEL_DICT"]["nuclei"],
         )
         n_channels = [[0, 0]]
         n_mask_array, n_flows, n_styles = segmentation_model.eval(
@@ -92,7 +93,8 @@ class Image:
     def _c_segmentation(self):
         """perform cellpose segmentation using cell mask"""
         segmentation_model = models.CellposeModel(
-            gpu=torch.cuda.is_available(), model_type=self._get_models()
+            gpu=True if Defaults["GPU"] else torch.cuda.is_available(),
+            model_type=self._get_models(),
         )
         c_channels = [[2, 1]]
         # combine the 2 channel numpy array for cell segmentation with the nuclei channel

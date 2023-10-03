@@ -39,4 +39,5 @@ Defaults = {
     ],
     "DEBUG": False,
     "PROJECT_ID": 5313,
+    "GPU": None,
 }
