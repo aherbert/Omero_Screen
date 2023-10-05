@@ -156,6 +156,7 @@ class MetaData:
         ann = well.getAnnotation(Defaults["NS"])
         return dict(ann.getValue())
 
+
 class ProjectSetup:
     """Class to set up the Omero-Screen project and organise the metadata"""
 
@@ -164,7 +165,37 @@ class ProjectSetup:
         self.user_id = self.conn.getUser().getId()
         self.plate_id = plate_id
         self.dataset_id = self._create_dataset()
-        self._link_project_dataset()
+
+
+    # def _create_project(self):
+    #     """Check for a Screen project to store the linked data set, if not present, create it."""
+    #
+    #     # Fetch all projects
+    #     project_name = "Screens"
+    #     projects = list(
+    #         self.conn.getObjects(
+    #             "Project",
+    #             opts={"owner": self.user_id},
+    #             attributes={"name": project_name},
+    #         )
+    #     )
+    #
+    #     project_count = len(projects)
+    #     if project_count > 1:
+    #         raise Exception(
+    #             f"Data integrity issue: Multiple projects found with the same name '{project_name}' for user ID {self.user_id}"
+    #         )
+    #
+    #     elif project_count == 1:
+    #         project_id = projects[0].getId()  # The only match
+    #         print(f"Project exists with ID: {project_id}")
+    #         return project_id
+    #
+    #     else:
+    #         new_project = create_object(self.conn, "Project", project_name)
+    #         new_project_id = new_project.getId()
+    #         print(f"Project created with ID: {new_project_id}")
+    #         return new_project_id
 
     def _create_dataset(self):  # sourcery skip: raise-specific-error
         """Create a new dataset."""
@@ -197,13 +228,11 @@ class ProjectSetup:
             new_dataset = create_object(self.conn, "Dataset", self.plate_id)
             new_dataset_id = new_dataset.getId()
             print(f"Dataset created with ID: {new_dataset_id}")
+            link = omero.model.ProjectDatasetLinkI()
+            link.setChild(omero.model.DatasetI(self.dataset_id, False))
+            link.setParent(omero.model.ProjectI(Defaults["PROJECT_ID"], False))
+            self.conn.getUpdateService().saveObject(link)
+            print("Link created")
             return new_dataset_id
 
-    def _link_project_dataset(self):
-        """Link a project and a dataset."""
-        # If we reach here, it means the dataset is not linked to the project. So, create a new link.
-        link = omero.model.ProjectDatasetLinkI()
-        link.setChild(omero.model.DatasetI(self.dataset_id, False))
-        link.setParent(omero.model.ProjectI(Defaults["PROJECT_ID"], False))
-        self.conn.getUpdateService().saveObject(link)
-        print("Link created")
+
