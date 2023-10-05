@@ -86,7 +86,8 @@ class Image:
         )
         n_channels = [[0, 0]]
         n_mask_array, n_flows, n_styles = segmentation_model.eval(
-            self.img_dict["DAPI"], channels=n_channels
+            scale_img(self.img_dict["DAPI"]), channels=n_channels, diameter=10,
+            normalize=False
         )
         return filter_segmentation(n_mask_array)
 
@@ -98,9 +99,10 @@ class Image:
         )
         c_channels = [[2, 1]]
         # combine the 2 channel numpy array for cell segmentation with the nuclei channel
-        comb_image = np.dstack([self.img_dict["DAPI"], self.img_dict["Tub"]])
+        comb_image = scale_img(np.dstack([self.img_dict["DAPI"], self.img_dict["Tub"]]))
         c_masks_array, c_flows, c_styles = segmentation_model.eval(
-            comb_image, channels=c_channels
+            comb_image, channels=c_channels, diameter=40,
+            normalize=False
         )
         # return cleaned up mask using filter function
         return filter_segmentation(c_masks_array)
