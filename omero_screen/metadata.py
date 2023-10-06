@@ -167,41 +167,12 @@ class ProjectSetup:
         self.dataset_id = self._create_dataset()
 
 
-    # def _create_project(self):
-    #     """Check for a Screen project to store the linked data set, if not present, create it."""
-    #
-    #     # Fetch all projects
-    #     project_name = "Screens"
-    #     projects = list(
-    #         self.conn.getObjects(
-    #             "Project",
-    #             opts={"owner": self.user_id},
-    #             attributes={"name": project_name},
-    #         )
-    #     )
-    #
-    #     project_count = len(projects)
-    #     if project_count > 1:
-    #         raise Exception(
-    #             f"Data integrity issue: Multiple projects found with the same name '{project_name}' for user ID {self.user_id}"
-    #         )
-    #
-    #     elif project_count == 1:
-    #         project_id = projects[0].getId()  # The only match
-    #         print(f"Project exists with ID: {project_id}")
-    #         return project_id
-    #
-    #     else:
-    #         new_project = create_object(self.conn, "Project", project_name)
-    #         new_project_id = new_project.getId()
-    #         print(f"Project created with ID: {new_project_id}")
-    #         return new_project_id
-
     def _create_dataset(self):  # sourcery skip: raise-specific-error
         """Create a new dataset."""
         dataset_name = str(self.plate_id)
         try:
             project = self.conn.getObject("Project", Defaults["PROJECT_ID"])
+            assert project.getName() == 'Screens', "Project name does not match 'Screens'"
         except Exception as e:
             raise Exception(
                 f"Project for Screen with ID {Defaults['PROJECT_ID']} not found"
