@@ -198,12 +198,11 @@ class ProjectSetup:
         else:
             new_dataset = create_object(self.conn, "Dataset", self.plate_id)
             new_dataset_id = new_dataset.getId()
-            print(f"Dataset created with ID: {new_dataset_id}")
             link = omero.model.ProjectDatasetLinkI()
-            link.setChild(omero.model.DatasetI(self.dataset_id, False))
+            link.setChild(omero.model.DatasetI(new_dataset_id, False))
             link.setParent(omero.model.ProjectI(Defaults["PROJECT_ID"], False))
             self.conn.getUpdateService().saveObject(link)
-            print("Link created")
+            print(f"Dataset {new_dataset.getName()} created and linked tpo Screens project")
             return new_dataset_id
 
 
