@@ -64,10 +64,26 @@ def plate_loop(plate_id: int, conn: BlitzGateway) -> Tuple[pd.DataFrame, pd.Data
     df_final, df_quality_control = process_wells(
         metadata, project_data, flatfield_dict, conn
     )
-    if "EdU" in metadata.channels.keys():
-        df_final = cellcycle_analysis(df_final)
+
+    # check conditiosn for cell cycle analysis
+    keys = metadata.channels.keys()
+
+    if "EdU" in keys:
+
+        H3 = "H3P" in keys
+        cyto = "Tub" in keys
+
+        if H3 and cyto:
+            df_final = cellcycle_analysis(df_final, H3=True, cyto=True)
+        elif H3:
+            df_final = cellcycle_analysis(df_final, H3=True)
+        elif not cyto:
+            df_final = cellcycle_analysis(df_final, cyto=False)
+        else:
+            df_final = cellcycle_analysis(df_final)
         wells = list(metadata.plate_obj.listChildren())
         add_welldata(wells, df_final, conn)
+
     save_results(df_final, df_quality_control, metadata, plate_name, conn)
     return df_final, df_quality_control
 

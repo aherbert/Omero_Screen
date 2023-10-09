@@ -5,7 +5,7 @@
     <option name="enabledOnSave" value="true" />
     <option name="executionMode" value="BINARY" />
     <option name="pathToExecutable" value="$USER_HOME$/.pyenv/shims/black" />
-    <option name="sdkUUID" value="d5c27299-919f-43be-98d6-f9b5bd806eb2" />
+    <option name="sdkName" value="$USER_HOME$/mambaforge/envs/omero_screen" />
   </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="$USER_HOME$/mambaforge/envs/omero_screen" project-jdk-type="Python SDK" />
 </project>

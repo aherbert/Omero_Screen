@@ -20,6 +20,8 @@ Defaults = {
     "MODEL_DICT": {
         "nuclei": "Nuclei_Hoechst",
         "RPE-1": "RPE-1_Tub_Hoechst",
+        "RPE-1_WT": "RPE-1_Tub_Hoechst",
+        "RPE-1_P53KO": "RPE-1_Tub_Hoechst",
         "HELA": "HeLa_Tub_Hoechst",
         "U2OS": "U2OS_Tub_Hoechst",
         "MM231": "RPE-1_Tub_Hoechst",
