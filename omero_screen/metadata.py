@@ -102,6 +102,7 @@ class MetaData:
                 raise ValueError("Well metadata are not present")
         else:
             df = self.well_inputs
+            df = df.astype(str)
             df_dict = {
                 row["Well"]: [[col, row[col]] for col in df.columns if col != "Well"]
                 for _, row in df.iterrows()

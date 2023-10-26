@@ -9,7 +9,18 @@ The flatfield corr function returns a dictionary with channel names and the corr
 """
 
 
+import os
+import platform
+import random
+import tempfile
+
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
 import omero
+from ezomero import get_image
+from tqdm import tqdm
+
 from omero_screen.aggregator import ImageAggregator
 from omero_screen.general_functions import (
     scale_img,
@@ -18,15 +29,6 @@ from omero_screen.general_functions import (
     add_map_annotation,
 )
 from omero_screen.metadata import MetaData, ProjectSetup
-import matplotlib.pyplot as plt
-import numpy as np
-from tqdm import tqdm
-import matplotlib
-import tempfile
-import platform
-import random
-import os
-
 
 if platform.system() == "Darwin":
     matplotlib.use("MacOSX")  # avoid matplotlib warning about interactive backend
@@ -177,10 +179,10 @@ def generate_corr_dict(plate, channels, conn, dataset_id):
         example = gen_example(img_list, channel, norm_mask, conn)
         example_fig(conn, example, channel, dataset_id)
         corr_dict[channel[0]] = norm_mask  # associates channel name with flatfield mask
-    sorted_corr_dict = {
-        k: corr_dict[k] for k, v in sorted(channels.items(), key=lambda item: item[1])
+    return {
+        k: corr_dict[k]
+        for k, v in sorted(channels.items(), key=lambda item: item[1])
     }
-    return sorted_corr_dict
 
 
 def random_imgs(plate):
@@ -198,7 +200,7 @@ def random_imgs(plate):
     img_list = []
     for well in wells:
         index = well.countWellSample()
-        img_list.extend(well.getImage(index).getId() for index in range(0, index))
+        img_list.extend(well.getImage(index).getId() for index in range(index))
     return img_list if len(img_list) <= 100 else random.sample(img_list, 100)
 
 
@@ -216,11 +218,21 @@ def aggregate_imgs(img_list, channel, conn):
     """
     agg = ImageAggregator(60)
     for img_id in tqdm(img_list):
-        image = conn.getObject("Image", img_id)
-        image_array = generate_image(image, channel[1])
-        agg.add_image(image_array)
+        image, image_array = get_image(conn, img_id)
+        mip_array = np.max(image_array[..., channel[1]], axis=1, keepdims=True)
+        for t_img in random_timgs(mip_array):
+            agg.add_image(t_img.reshape(1080, 1080))
     blurred_agg_img = agg.get_gaussian_image(30)
     return blurred_agg_img / blurred_agg_img.mean()
+
+def random_timgs(image_array):
+    individual_images = []
+    num_images_to_select = min(10, image_array.shape[0])  # Ensure we don't select more than available
+    selected_indices = random.sample(range(image_array.shape[0]), num_images_to_select)
+    individual_images.extend(
+        image_array[index : index + 1] for index in selected_indices
+    )
+    return individual_images
 
 
 def gen_example(img_list, channel, mask, conn):
@@ -313,8 +325,8 @@ if __name__ == "__main__":
 
     @omero_connect
     def flatfield_test(conn=None):
-        project_data = ProjectSetup(1237, conn)
-        meta_data = MetaData(conn, 1237)
+        project_data = ProjectSetup(3, conn)
+        meta_data = MetaData(conn, 3)
         return flatfieldcorr(meta_data, project_data, conn)
 
     flatfield_corr = flatfield_test()

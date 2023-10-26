@@ -25,6 +25,7 @@ Defaults = {
         "HELA": "HeLa_Tub_Hoechst",
         "U2OS": "U2OS_Tub_Hoechst",
         "MM231": "RPE-1_Tub_Hoechst",
+        "HCC1143": "RPE-1_Tub_Hoechst",
         "MM231_SCR": "MM231_Tub_Hoechst",
         "MM231_GWL": "MM231_Tub_Hoechst",
         "SCR_MM231": "MM231_Tub_Hoechst",

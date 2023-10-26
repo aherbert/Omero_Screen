@@ -180,9 +180,12 @@ def add_welldata(wells, df_final, conn):
     """
     for well in wells:
         well_pos = well.getWellPos()
-        fig = combplot(df_final, well_pos)
-        delete_annotations(well, conn)
-        load_fig(fig, well, well_pos, conn)
+        if len(df_final[df_final["well"] == well_pos]) > 100:
+            fig = combplot(df_final, well_pos)
+            delete_annotations(well, conn)
+            load_fig(fig, well, well_pos, conn)
+        else:
+            print(f"Insufficient data for {well_pos}")
 
 
 if __name__ == "__main__":

@@ -339,7 +339,6 @@ def combplot(
     H3=False,
 ):
     df1 = df[df.well == well]
-
     fig = plt.figure(figsize=(5, 5))
     gs = GridSpec(2, 2, height_ratios=[1, 3], width_ratios=[3, 1])
     y_max = df["intensity_mean_EdU_nucleus_norm"].quantile(0.99) * 1.5
