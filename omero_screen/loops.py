@@ -41,7 +41,7 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict):
     return df_well, df_well_quality
 
 
-def plate_loop(plate_id: int, conn: BlitzGateway) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def plate_loop(plate_id: int, conn: BlitzGateway):
     """
     Main loop to process a plate.
     :param plate_id: ID of the plate
@@ -74,18 +74,20 @@ def plate_loop(plate_id: int, conn: BlitzGateway) -> Tuple[pd.DataFrame, pd.Data
         cyto = "Tub" in keys
 
         if H3 and cyto:
-            df_final = cellcycle_analysis(df_final, H3=True, cyto=True)
+            df_final_cc = cellcycle_analysis(df_final, H3=True, cyto=True)
         elif H3:
-            df_final = cellcycle_analysis(df_final, H3=True)
+            df_final_cc = cellcycle_analysis(df_final, H3=True)
         elif not cyto:
-            df_final = cellcycle_analysis(df_final, cyto=False)
+            df_final_cc = cellcycle_analysis(df_final, cyto=False)
         else:
-            df_final = cellcycle_analysis(df_final)
+            df_final_cc = cellcycle_analysis(df_final)
         wells = list(metadata.plate_obj.listChildren())
-        add_welldata(wells, df_final, conn)
+        add_welldata(wells, df_final_cc, conn)
+    else:
+        df_final_cc = None
 
-    save_results(df_final, df_quality_control, metadata, plate_name, conn)
-    return df_final, df_quality_control
+    save_results(df_final, df_final_cc, df_quality_control, metadata, plate_name, conn)
+    return df_final, df_final_cc, df_quality_control
 
 
 def print_device_info() -> None:
@@ -138,6 +140,7 @@ def process_wells(
 
 def save_results(
     df_final: pd.DataFrame,
+    df_final_cc,
     df_quality_control: pd.DataFrame,
     metadata: MetaData,
     plate_name: str,
@@ -149,26 +152,37 @@ def save_results(
     :param df_quality_control: DataFrame containing quality control data
     :param plate_name: Name of the plate
     """
+    # delete pre-existing data
+    delete_annotations(metadata.plate_obj, conn)
+    #save and load final data and if available cell cycle data
     path = (
         pathlib.Path(Defaults["DEFAULT_DEST_DIR"]) / f"{metadata.plate_obj.getName()}"
     )
     path.mkdir(exist_ok=True)
-    file_path = path / f"{plate_name}_final_data.csv"
-    cols = df_final.columns.tolist()
-    i = cols.index("experiment")
-    # save csv files to project directory
-    df_final.to_csv(
-        file_path,
-        columns=cols[i:] + cols[:i],
+    file_path = save_data_csv(
+        path, plate_name, '_final_data.csv', df_final
     )
-    df_quality_control.to_csv(path / f"{plate_name}_quality_ctr.csv")
-    # delete pre-existing data
-    delete_annotations(metadata.plate_obj, conn)
-    # load data from loop to OMERO plate
-    load_csvdata(metadata.plate_obj, f"{plate_name}_quality_ctr.csv", file_path, conn)
+    load_csvdata(metadata.plate_obj, file_path, conn)
+    if df_final_cc is not None:
+        file_path_cc = save_data_csv(
+            path, plate_name, '_final_data_cc.csv', df_final_cc
+        )
+        load_csvdata(metadata.plate_obj, file_path_cc, conn)
     # load quality control figure
+    df_quality_control.to_csv(path / f"{plate_name}_quality_ctr.csv")
     quality_fig = quality_control_fig(df_quality_control)
     load_fig(quality_fig, metadata.plate_obj, f"{plate_name}_quality_ctr", conn)
+
+
+# TODO Rename this here and in `save_results`
+def save_data_csv(path, plate_name, df_name, df):
+    result = path / f"{plate_name}{df_name}"
+
+    cols = df.columns.tolist()
+    i = cols.index("experiment")
+        # save csv files to project directory
+    df.to_csv(result, columns=cols[i:] + cols[:i])
+    return result
 
 
 def add_welldata(wells, df_final, conn):

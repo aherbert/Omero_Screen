@@ -45,7 +45,7 @@ def load_fig(fig, omero_obj, title, conn):
             print(f"An error occurred while uploading the file: {e}")
 
 
-def load_csvdata(plate, file_name, file_path, conn):
+def load_csvdata(plate, file_path, conn):
     """
     Load the data from the Excel file attached to the plate.
     :param plate: omero plate object
