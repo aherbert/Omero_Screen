@@ -99,8 +99,8 @@ def create_job_script(args):
       print(inspect.cleandoc('''
         set +e
         runcmd python {torch_test}
-        if [ $? -ne 0 ]; then
-          code=$?
+        code=$?
+        if [ $code -ne 0 ]; then
           msg Torch test exit code: $code
           python {send_mail} -m "{msg}" -s "{subject}" {username}@sussex.ac.uk
           exit $code
