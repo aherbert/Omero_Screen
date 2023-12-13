@@ -61,9 +61,9 @@ This is best done via the cellpose GUI. However, the M1 compatible cellpose vers
 Note: Use your Sussex Omero username and password here as the json data.
 
 4) Clone cellpose M1 version: To run cellpose on the Mac GPUs, clone or download Peter Sobolewski's adaptation of cellpose from [https://github.com/psobolewskiPhD/cellpose](https://github.com/psobolewskiPhD/cellpose). Clone this into your home directory
-5) Make a new conda environment called omero-screen (using the mamba-forge installation of conda)
+5) Make a new conda environment (python 3.10) called omero-screen (using the mamba-forge installation of conda)
 6) conda install omero-py
-7) pip install ~/cellpose # thsi will install the local copy of the M1 compatible cellpose version
+7) pip install ~/cellpose  		// this will install the local copy of the M1 compatible cellpose version
 8) pip install ezomero pandas scikit-image matplotlib seaborn
 
 activate the environment. You can cd to bin and run omero_screen from the terminal. (To do this, you need to add
