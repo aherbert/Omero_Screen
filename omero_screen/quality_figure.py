@@ -5,9 +5,9 @@ def quality_control_fig(df):
     """Plot the quality control data for each image"""
     df["position"] = df["position"].astype("category")
     medians = (
-        df.groupby(["position", "channel"])["intensity_median"].mean().reset_index()
+        df.groupby(["position", "channel"], observed=False)["intensity_median"].mean().reset_index()
     )
-    std = df.groupby(["position", "channel"])["intensity_median"].std().reset_index()
+    std = df.groupby(["position", "channel"], observed=False)["intensity_median"].std().reset_index()
     channel_num = len(df.channel.unique())
     well_num = len(df.position.unique())
     # Plotting the results

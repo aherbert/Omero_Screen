@@ -4,8 +4,28 @@ __version__ = "0.1.1"
 
 
 import pathlib
+import json
+
+try:
+    with open("../data/secrets/config.json",) as file:
+        server_data = True
+        data = json.load(file)
+        username = data["username"]
+        password = data["password"]
+        server = data["server"]
+        project = data["project"]
+except IOError:
+        server_data = False
+        username = 'invalid'
+        password = 'invalid'
+        server = 'invalid'
+        project = 5313
+        
+
+
 
 Defaults = {
+    
     "DEFAULT_DEST_DIR": str(
         pathlib.Path.home() / "Desktop"
     ),  # Decides where the final data folder will be made
@@ -41,6 +61,10 @@ Defaults = {
         "centroid",
     ],
     "DEBUG": False,
-    "PROJECT_ID": 5313,
+    "SERVER_DATA": server_data,
+    "USERNAME": username,
+    "PASSWORD": password,
+    "SERVER": server,
+    "PROJECT_ID": project,
     "GPU": None,
 }

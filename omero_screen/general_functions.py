@@ -1,5 +1,6 @@
 import omero
 from omero.gateway import BlitzGateway
+from omero_screen import Defaults
 import pathlib
 import numpy as np
 from skimage import exposure, color
@@ -46,15 +47,15 @@ def omero_connect(func):
 
     @functools.wraps(func)
     def wrapper_omero_connect(*args, **kwargs):
-        try:
-            with open("../data/secrets/config.json") as file:
-                data = json.load(file)
-            username = data["username"]
-            password = data["password"]
-        except IOError:
+        if Defaults['SERVER_DATA']:
+            username = Defaults['USERNAME']
+            password = Defaults['PASSWORD']
+            server = Defaults['SERVER']
+        else:
             username = input("Username: ")
             password = getpass.getpass(prompt="Password: ")
-        conn = BlitzGateway(username, password, host="ome2.hpc.sussex.ac.uk")
+            server = "ome2.hpc.sussex.ac.uk"
+        conn = BlitzGateway(username, password, host=server)
         value = None
         try:
             print("Connecting to Omero")
@@ -79,7 +80,7 @@ def omero_connect_test(func):
     :param func: function to be decorated
     :return: wrapper function: passes conn to function and closes it after execution
     """
-
+    server = Defaults.SERVER
     @functools.wraps(func)
     def wrapper_omero_connect(*args, **kwargs):
         try:
