@@ -12,6 +12,9 @@ def quality_control_fig(df):
     well_num = len(df.position.unique())
     # Plotting the results
     fig, ax = plt.subplots(nrows=channel_num, figsize=(well_num, channel_num))
+    # Ensure ax is always a list of Axes, even when there's only one subplot
+    if channel_num == 1:
+        ax = [ax]
     for i, channel in enumerate(df.channel.unique()):
         channel_df = medians[medians["channel"] == channel]
         channel_std = std[std["channel"] == channel]["intensity_median"]
