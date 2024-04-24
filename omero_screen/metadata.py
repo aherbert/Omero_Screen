@@ -138,7 +138,7 @@ class MetaData:
                 if isinstance(ann, MapAnnotationWrapper)
             ]
             found_cell_line = any(
-                "cell_line" in dict(ann.getValue()) for ann in annotations
+                "cell_line" in dict(ann.getValue().lower()) for ann in annotations
             )
 
             if not found_cell_line:
