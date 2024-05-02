@@ -125,6 +125,7 @@ class MetaData:
         """
         Checks if the plate with id 'plate_id' contains a 'cell_line' annotation for all wells
         """
+
         plate = self.conn.getObject("Plate", self.plate_id)
         if plate is None:
             print(f"Cannot find plate: {self.plate_id}")
@@ -137,12 +138,16 @@ class MetaData:
                 for ann in well.listAnnotations()
                 if isinstance(ann, MapAnnotationWrapper)
             ]
+
             found_cell_line = any(
-                "cell_line" in dict(ann.getValue()) for ann in annotations 
+                "cell_line" in dict(ann.getValue())
+                or "Cell_Line" in dict(ann.getValue())
+                for ann in annotations
             )
 
             if not found_cell_line:
                 well_list.append(well.id)
+
 
         if well_list:
             print(f"Found {len(well_list)} wells without a 'cell_line' annotation")
