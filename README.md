@@ -36,7 +36,11 @@ and use the project ID instead of 5313 in the config.json file (see below, point
 ### Installation of Mac with apple silicon chip for Hochegger lab members
 
 1) Clone this repository: git clone
-2) Load the cellpose models:
+2) Make sure you have mamba installed and working (conda install mamba -n base -c conda-forge)
+3) Make a new conda env using the environment.yml file in the repe (mamba env create -f environment.yml)
+4) clone the M1 compatible cellpose version from github https://github.com/psobolewskiPhD/cellpose/tree/feature/add_MPS_device
+5) pip install this to the omero-screen conda env
+6) Load the cellpose models:
 
 This is best done via the cellpose GUI. However, the M1 compatible cellpose version does not have the GUI functionality of cellpose. To do this follow these steps:
 
@@ -44,7 +48,7 @@ This is best done via the cellpose GUI. However, the M1 compatible cellpose vers
 * activate the env and type cellpose in the terminal. This should open the cellpose gui.
 * Click on Models -> Add custom torch model to GUI -> load the models from Omero_Screen/data/Cellpose_models.
 
-3) In the data folder make a new folder called secrets that contains a file called config.json. In this file generate a json data structure with the following info:
+7. In the data folder make a new folder called secrets that contains a file called config.json. In this file generate a json data structure with the following info:
 
 {
 
@@ -60,14 +64,10 @@ This is best done via the cellpose GUI. However, the M1 compatible cellpose vers
 
 Note: Use your Sussex Omero username and password here as the json data.
 
-4) Clone cellpose M1 version: To run cellpose on the Mac GPUs, clone or download Peter Sobolewski's adaptation of cellpose from [https://github.com/psobolewskiPhD/cellpose](https://github.com/psobolewskiPhD/cellpose). Clone this into your home directory
-5) Make a new conda environment (python 3.10) called omero-screen (using the mamba-forge installation of conda)
-6) conda install omero-py
-7) pip install ~/cellpose  		// this will install the local copy of the M1 compatible cellpose version
-8) pip install ezomero pandas scikit-image matplotlib seaborn
+8. To run the script from the terminal:
 
-activate the environment. You can cd to bin and run omero_screen from the terminal. (To do this, you need to add
+add export PYTHONPATH=/path to Omero_Screen repo:${PYTHONPATH} to your .zshrc file
 
-export PYTHONPATH=/path to Omero_Screen repo:${PYTHONPATH}
+(for example: export PYTHONPATH=/Users/hh65/code/Omero_Screen:${PYTHONPATH})
 
-to your .zshrc file.)
+9. To run the script cd to the bin folder and run omero_screen_run_term Plate_id --
