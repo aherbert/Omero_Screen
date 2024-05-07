@@ -6,9 +6,10 @@ from matplotlib.gridspec import GridSpec
 import seaborn as sns
 from pathlib import Path
 from omero_screen.general_functions import save_fig
+import os
 
 
-STYLE = Path("../data/Style_01.mplstyle")
+STYLE =  "../data/Style_01.mplstyle"
 plt.style.use(STYLE)
 prop_cycle = plt.rcParams["axes.prop_cycle"]
 colors = prop_cycle.by_key()["color"]
@@ -362,7 +363,7 @@ def combplot(
 
 
 if __name__ == "__main__":
-    df = pd.read_csv("/Users/hh65/Desktop/test_plate01/test_plate01_final_data.csv")
-    df_cc = cellcycle_analysis(df)
-    fig = combplot(df_cc, "C2", H3=False)
-    plt.show()
+    df = pd.read_csv("/Users/hh65/Desktop/Plate_20221211_P1_final_data.csv", index_col=0)
+    df_cc = cellcycle_analysis(df, H3=True, cyto=True)
+    #fig = combplot(df_cc, "C2", H3=True)
+    print(df_cc.head())

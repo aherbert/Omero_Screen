@@ -50,8 +50,8 @@ Defaults = {
         "MM231_GWL": "MM231_Tub_Hoechst",
         "SCR_MM231": "MM231_Tub_Hoechst",
         "GWL_MM231": "MM231_Tub_Hoechst",
-        "RPE1WT": "PALB_synchro",
-        "RPE1P53KO": "PALB_synchro",
+        "RPE1WT": "RPE-1_Tub_Hoechst",
+        "RPE1P53KO": "RPE-1_Tub_Hoechst",
     },
     "NS": "openmicroscopy.org/omero/client/mapAnnotation",
     "FEATURELIST": [

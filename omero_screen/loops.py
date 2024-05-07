@@ -69,20 +69,23 @@ def plate_loop(plate_id: int, conn: BlitzGateway):
     keys = metadata.channels.keys()
 
     if "EdU" in keys:
+        try:
+            H3 = "H3P" in keys
+            cyto = "Tub" in keys
 
-        H3 = "H3P" in keys
-        cyto = "Tub" in keys
-
-        if H3 and cyto:
-            df_final_cc = cellcycle_analysis(df_final, H3=True, cyto=True)
-        elif H3:
-            df_final_cc = cellcycle_analysis(df_final, H3=True)
-        elif not cyto:
-            df_final_cc = cellcycle_analysis(df_final, cyto=False)
-        else:
-            df_final_cc = cellcycle_analysis(df_final)
-        wells = list(metadata.plate_obj.listChildren())
-        add_welldata(wells, df_final_cc, conn)
+            if H3 and cyto:
+                df_final_cc = cellcycle_analysis(df_final, H3=True, cyto=True)
+            elif H3:
+                df_final_cc = cellcycle_analysis(df_final, H3=True)
+            elif not cyto:
+                df_final_cc = cellcycle_analysis(df_final, cyto=False)
+            else:
+                df_final_cc = cellcycle_analysis(df_final)
+            wells = list(metadata.plate_obj.listChildren())
+            add_welldata(wells, df_final_cc, conn)
+        except Exception as e:
+            print(e)
+            df_final_cc = None
     else:
         df_final_cc = None
 
