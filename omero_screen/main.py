@@ -1,8 +1,8 @@
 
 import os
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
-from omero_screen.loops import plate_loop
 from omero_screen import Defaults
+from omero_screen.loops import plate_loop
 from omero_screen.general_functions import omero_connect
 from omero_screen import Defaults
 

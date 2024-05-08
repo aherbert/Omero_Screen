@@ -1,3 +1,6 @@
+import omero_screen
+import os
+os.chdir(os.path.dirname(os.path.realpath(__file__)))
 from omero_screen import Defaults
 from omero_screen.metadata import MetaData, ProjectSetup
 from omero_screen.flatfield_corr import flatfieldcorr
@@ -14,8 +17,9 @@ import torch
 import pandas as pd
 import pathlib
 from typing import Tuple
+import logging
 
-
+logger = logging.getLogger("omero-screen")
 # Functions to loop through well object, assemble data for images and ave quality control data
 
 
@@ -48,7 +52,9 @@ def plate_loop(plate_id: int, conn: BlitzGateway):
     :param conn: Connection to OMERO
     :return: Two DataFrames containing the final data and quality control data
     """
+    logger.info(f"Processing plate {plate_id}")
     metadata = MetaData(conn, plate_id=plate_id)
+    logger.debug(f"Chennel Metadata: {metadata.channels}")
     plate_name = metadata.plate_obj.getName()
     project_data = ProjectSetup(plate_id, conn)
     flatfield_dict = flatfieldcorr(metadata, project_data, conn)
@@ -64,7 +70,7 @@ def plate_loop(plate_id: int, conn: BlitzGateway):
     df_final, df_quality_control = process_wells(
         metadata, project_data, flatfield_dict, conn
     )
-
+    logger.debug(f"Final data sample: {df_final.head()}")
     # check conditiosn for cell cycle analysis
     keys = metadata.channels.keys()
 
@@ -217,4 +223,4 @@ if __name__ == "__main__":
             conn, well, metadata, project_data, flatfield_dict
         )
 
-    test_well(1237, 15401)
+    test_well(1927, 34975)

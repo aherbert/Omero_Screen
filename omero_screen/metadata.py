@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Module to link to the omero db, extract metadata and link a project/dataset to the plate."""
 import tempfile
+import logging
 from omero_screen.general_functions import omero_connect
 import omero
 import pandas as pd
@@ -13,7 +14,7 @@ from omero_screen.omero_functions import (
     create_object,
 )
 
-
+logger = logging.getLogger("omero-screen")
 class MetaData:
     """Class to add the metadata to the plate."""
 
@@ -21,6 +22,7 @@ class MetaData:
         self.conn = conn
         self.plate_id = plate_id
         self.plate_obj = self.conn.getObject("Plate", self.plate_id)
+        logging.debug(f"Plate object: {self.plate_obj}")
         self.plate_length = len(list(self.plate_obj.listChildren()))
         self.channels, self.well_inputs = self._get_metadata()
         self._set_well_inputs()

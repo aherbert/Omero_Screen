@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import logging
 import omero
 from omero_screen.metadata import Defaults, MetaData, ProjectSetup
 from omero_screen.flatfield_corr import flatfieldcorr
@@ -20,6 +21,8 @@ import matplotlib.pyplot as plt
 import torch
 from cellpose import models
 
+
+logger = logging.getLogger("omero-screen")
 
 class Image:
     """
@@ -75,7 +78,9 @@ class Image:
         """
         cell_line = self.cell_line.replace(" ", "").upper() # remove spaces and make uppercase
         if cell_line in Defaults["MODEL_DICT"]:
+            logger.debug(f"Using {Defaults['MODEL_DICT'][cell_line]} model for {cell_line}")
             return Defaults["MODEL_DICT"][cell_line]
+        logger.debug(f"Using {Defaults['MODEL_DICT']['U2OS']} model for {cell_line}")
         return Defaults["MODEL_DICT"]["U2OS"]
 
     def _n_segmentation(self):
@@ -101,8 +106,7 @@ class Image:
         # combine the 2 channel numpy array for cell segmentation with the nuclei channel
         comb_image = scale_img(np.dstack ([self.img_dict["DAPI"], self.img_dict["Tub"]]))
         c_masks_array, c_flows, c_styles = segmentation_model.eval(
-            comb_image, channels=c_channels, diameter=40,
-            normalize=False
+            comb_image, channels=c_channels, normalize=False
         )
         # return cleaned up mask using filter function
         return filter_segmentation(c_masks_array)

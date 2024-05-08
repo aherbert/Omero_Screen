@@ -5,9 +5,40 @@ __version__ = "0.1.1"
 
 import pathlib
 import json
+import logging
+
+
+def setup_logging():
+    print("Setting up logging")
+    # Set a less verbose level for the root logger
+    logging.basicConfig(level=logging.WARNING)
+
+    # Create and configure your application's main logger
+    app_logger_name = "omero-screen"
+    app_logger = logging.getLogger(app_logger_name)
+    app_logger.setLevel(logging.INFO)  # Set to DEBUG or any other level
+
+    # Prevent propagation to the root logger
+    app_logger.propagate = False
+
+    # Create a console handler for the logger
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)  # Ensure it captures all levels processed by the logger
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
+    )
+    ch.setFormatter(formatter)
+    app_logger.addHandler(ch)
+
+
+# Ensure this is called when your package is imported
+setup_logging()
+
 
 try:
-    with open("../data/secrets/config.json",) as file:
+    with open(
+        "../data/secrets/config.json",
+    ) as file:
         server_data = True
         data = json.load(file)
         username = data["username"]
@@ -15,17 +46,14 @@ try:
         server = data["server"]
         project = data["project"]
 except IOError:
-        server_data = False
-        username = 'invalid'
-        password = 'invalid'
-        server = 'invalid'
-        project = 5313
-        
-
+    server_data = False
+    username = "invalid"
+    password = "invalid"
+    server = "invalid"
+    project = 5313
 
 
 Defaults = {
-    
     "DEFAULT_DEST_DIR": str(
         pathlib.Path.home() / "Desktop"
     ),  # Decides where the final data folder will be made
