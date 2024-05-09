@@ -223,4 +223,4 @@ if __name__ == "__main__":
             conn, well, metadata, project_data, flatfield_dict
         )
 
-    test_well(1927, 34975)
+    test_well(1927, 34984)

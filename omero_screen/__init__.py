@@ -80,6 +80,7 @@ Defaults = {
         "GWL_MM231": "MM231_Tub_Hoechst",
         "RPE1WT": "RPE-1_Tub_Hoechst",
         "RPE1P53KO": "RPE-1_Tub_Hoechst",
+        "RPE1wt_PALB": "only_PALB"
     },
     "NS": "openmicroscopy.org/omero/client/mapAnnotation",
     "FEATURELIST": [
