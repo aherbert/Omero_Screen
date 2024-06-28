@@ -16,14 +16,14 @@ def setup_logging():
     # Create and configure your application's main logger
     app_logger_name = "omero-screen"
     app_logger = logging.getLogger(app_logger_name)
-    app_logger.setLevel(logging.INFO)  # Set to DEBUG or any other level
+    app_logger.setLevel(logging.DEBUG)  # Set to DEBUG or any other level
 
     # Prevent propagation to the root logger
     app_logger.propagate = False
 
     # Create a console handler for the logger
     ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)  # Ensure it captures all levels processed by the logger
+    ch.setLevel(logging.DEBUG)  # Ensure it captures all levels processed by the logger
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
     )
@@ -70,6 +70,8 @@ Defaults = {
         "RPE-1": "RPE-1_Tub_Hoechst",
         "RPE-1_WT": "RPE-1_Tub_Hoechst",
         "RPE-1_P53KO": "RPE-1_Tub_Hoechst",
+        "RPE-1_WT_CycE": "RPE-1_Tub_Hoechst",
+        "RPE-1_P53KO_CycE": "RPE-1_Tub_Hoechst",
         "HELA": "HeLa_Tub_Hoechst",
         "U2OS": "U2OS_Tub_Hoechst",
         "MM231": "RPE-1_Tub_Hoechst",

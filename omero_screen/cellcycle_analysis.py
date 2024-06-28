@@ -364,6 +364,8 @@ def combplot(
 
 if __name__ == "__main__":
     df = pd.read_csv("/Users/hh65/Desktop/Plate_20221211_P1_final_data.csv", index_col=0)
+    print(df.head())
+    print(df.columns)
     df_cc = cellcycle_analysis(df, H3=True, cyto=True)
     #fig = combplot(df_cc, "C2", H3=True)
     print(df_cc.head())

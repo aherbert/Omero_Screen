@@ -78,9 +78,7 @@ class Image:
         """
         cell_line = self.cell_line.replace(" ", "").upper() # remove spaces and make uppercase
         if cell_line in Defaults["MODEL_DICT"]:
-            logger.debug(f"Using {Defaults['MODEL_DICT'][cell_line]} model for {cell_line}")
             return Defaults["MODEL_DICT"][cell_line]
-        logger.debug(f"Using {Defaults['MODEL_DICT']['U2OS']} model for {cell_line}")
         return Defaults["MODEL_DICT"]["U2OS"]
 
     def _n_segmentation(self):

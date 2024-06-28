@@ -71,6 +71,7 @@ def plate_loop(plate_id: int, conn: BlitzGateway):
         metadata, project_data, flatfield_dict, conn
     )
     logger.debug(f"Final data sample: {df_final.head()}")
+    logger.debug(f"Final data columns: {df_final.columns}")
     # check conditiosn for cell cycle analysis
     keys = metadata.channels.keys()
 
