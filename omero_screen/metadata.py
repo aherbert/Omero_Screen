@@ -94,6 +94,7 @@ class MetaData:
         # changing channel number to integer type
         for key in cleaned_channels:
             cleaned_channels[key] = int(cleaned_channels[key])
+        logger.info(f"Channels: {cleaned_channels}")
         return cleaned_channels
 
     def _set_well_inputs(self):

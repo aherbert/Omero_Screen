@@ -295,3 +295,48 @@ def create_object(conn, obj_type, name, description=None):
         obj.setDescription(omero.rtypes.rstring(description))
 
     return conn.getUpdateService().saveAndReturnObject(obj)
+
+
+def upload_image(dataset_id, omero_image, array_list, conn):
+    """
+    Uploads generated images to OMERO server and links them to the specified dataset.
+    The id of the mask is stored as an annotation on the original screen image.
+
+    Parameters:
+    n_mask (numpy array): Nuclei segmentation mask
+    c_mask (numpy array): Cell segmentation mask
+    Returns:
+    None. The image is saved to the OMERO server and linked to the specified dataset.
+    """
+
+    image_name = f"{omero_image.getId()}_segmentation"
+    dataset = conn.getObject("Dataset", dataset_id)
+
+    def plane_gen():
+        """Generator that yields each plane in the array_list"""
+        yield from array_list
+
+    # Create the image in the dataset
+    mask = conn.createImageFromNumpySeq(
+        plane_gen(), image_name, 1, len(array_list), 1, dataset=dataset
+    )
+
+    # Create a map annotation to store the segmentation mask ID
+    key_value_data = [["Segmentation_Mask", str(mask.getId())]]
+
+    # Get the existing map annotations of the image
+    map_anns = list(
+        omero_image.listAnnotations(ns=omero.constants.metadata.NSCLIENTMAPANNOTATION)
+    )
+    if map_anns:  # If there are existing map annotations
+        for ann in map_anns:
+            ann_values = dict(ann.getValue())
+            if "Segmentation_Mask" in ann_values:  # If the desired annotation exists
+                conn.deleteObject(ann._obj)  # Delete the existing annotation
+    # Create a new map annotation
+    map_ann = omero.gateway.MapAnnotationWrapper(conn)
+    map_ann.setNs(omero.constants.metadata.NSCLIENTMAPANNOTATION)
+    map_ann.setValue(key_value_data)
+
+    map_ann.save()
+    omero_image.linkAnnotation(map_ann)

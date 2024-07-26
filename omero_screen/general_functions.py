@@ -1,6 +1,7 @@
 import omero
-from omero.gateway import BlitzGateway
+from omero.gateway import BlitzGateway, _ImageWrapper, _DatasetWrapper
 from omero_screen import Defaults
+from ezomero import get_image
 import pathlib
 import numpy as np
 from skimage import exposure, color
@@ -198,3 +199,38 @@ def add_map_annotation(omero_object, key_value, conn=None):
     map_ann.setValue(key_value)
     map_ann.save()
     omero_object.linkAnnotation(map_ann)
+
+def process_mip(conn: BlitzGateway, image: _ImageWrapper) -> np.ndarray:
+    """
+    Generate maximum intensity projection of a z-stack image.add()
+    The get_image function returns an array of the shale ((t, z, x, y, c))
+    This function only takes arrays with a single time dimension and this gets
+    eliminated by the squeeze function.
+    :param image: _imageWrapper object
+    :return: numpy array of maximum intensity projection (x, y, c)
+    """
+    img, array = get_image(conn, image.getId())
+    array_squeezed = np.squeeze(array, axis=0)
+    return np.max(array_squeezed, axis=0)
+
+def image_generator(image_array):
+    for c in range(image_array.shape[-1]):
+        yield image_array[..., c]
+
+
+def load_mip(conn: BlitzGateway, image: _ImageWrapper, dataset: _DatasetWrapper ) -> None:
+    """
+    Load the maximum intensity projection of a z-stack image to OMERO
+    :param image: _ImageWrapper object
+    :param _ImageWrapper: maximum intensity projection
+    :return: None
+    """
+    
+    mip = process_mip(image)
+    channel_num = mip.shape[-1]
+    mip_name = f"mip_{image.getId()}"
+    img_gen = image_generator(mip)
+    image = conn.createImageFromNumpySeq(
+        img_gen, mip_name, 1, channel_num, 1, dataset=dataset
+    )
+    add_map_annotation(image, mip_name, conn=conn)

@@ -33,11 +33,14 @@ def setup_logging():
 
 # Ensure this is called when your package is imported
 setup_logging()
+logger = logging.getLogger("omero-screen")
 
-
+# Derive the absolute path to the config.json file
+current_dir = pathlib.Path(__file__).parent
+config_path = current_dir / "../data/secrets/config_test.json"
 try:
     with open(
-        "../data/secrets/config.json",
+        config_path
     ) as file:
         server_data = True
         data = json.load(file)
@@ -45,6 +48,7 @@ try:
         password = data["password"]
         server = data["server"]
         project = data["project"]
+        logger.info("Successfully loaded server data")
 except IOError:
     server_data = False
     username = "invalid"
