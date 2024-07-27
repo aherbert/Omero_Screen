@@ -29,7 +29,6 @@ from omero_screen.general_functions import (
     add_map_annotation,
 )
 from omero_screen.metadata import MetaData, ProjectSetup
-from omero_screen.parse_mip import parse_mip
 
 
 logger = logging.getLogger("omero-screen")
@@ -178,12 +177,12 @@ def generate_corr_dict(plate, channels, conn, dataset_id):
     print(f"\nAssembling Flatfield Correction Masks for {len(channels)} Channels\n")
     corr_dict = {}
     img_list = random_imgs(plate)
-    # check if images are 4D with z-stacks
-    first_img_id = img_list[0]
-    first_img = conn.getObject("Image", first_img_id)
-    if first_img.getSizeZ() > 1:
-        logger.info(f"Images are 4D with {first_img.getSizeZ()} z-stacks")
-        img_list = [parse_mip(img_id, dataset_id, conn) for img_id in img_list]
+    # # check if images are 4D with z-stacks
+    # first_img_id = img_list[0]
+    # first_img = conn.getObject("Image", first_img_id)
+    # if first_img.getSizeZ() > 1:
+    #     logger.info(f"Images are 4D with {first_img.getSizeZ()} z-stacks")
+    #     img_list = [parse_mip(img_id, dataset_id, conn) for img_id in img_list]
     for channel in list(channels.items()):
         norm_mask = aggregate_imgs(img_list, channel, conn)
         example = gen_example(img_list, channel, norm_mask, conn)
@@ -335,8 +334,9 @@ if __name__ == "__main__":
 
     @omero_connect
     def flatfield_test(conn=None):
-        project_data = ProjectSetup(351, conn)
-        meta_data = MetaData(conn, 351)
+        project_data = ProjectSetup(352, conn)
+        meta_data = MetaData(conn, 352)
+        print(meta_data.channels.items())
         return flatfieldcorr(meta_data, project_data, conn)
 
     flatfield_corr = flatfield_test()

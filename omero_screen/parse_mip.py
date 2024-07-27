@@ -70,27 +70,31 @@ def load_mip(conn: BlitzGateway, image: _ImageWrapper, dataset_id: int) -> None:
     :return: None
     """
     dataset = conn.getObject("Dataset", dataset_id)
-    mip = process_mip(conn, image)
-    channel_num = mip.shape[-1]
+    mip_array = process_mip(conn, image)
+    channel_num = mip_array.shape[-1]
     mip_name = f"mip_{image.getId()}"
-    img_gen = image_generator(mip)
+    img_gen = image_generator(mip_array)
     new_image = conn.createImageFromNumpySeq(
         img_gen, mip_name, 1, channel_num, 1, dataset=dataset
     )
     add_map_annotation(image, [("name", f"mip_{new_image.getId()}")], conn=conn)
-    return int(new_image.getId())
+    return mip_array
 
 
 def parse_mip(image_id, dataset_id, conn):
     image = conn.getObject("Image", image_id)
     if not (mip_id := check_map_annotation(image)):
         return load_mip(conn, image, dataset_id)
-    return int(mip_id)
+    _, mip_array = get_image(conn, int(mip_id))
+    return mip_array
 
 
 
 if __name__ == "__main__":
-    mip = parse_mip()
-    print(mip)
+    conn = BlitzGateway("root", "omero", host="localhost")
+    conn.connect()
+    mip = parse_mip(8151, 452, conn)
+    print(mip.mean())
+    conn.close()
     
     

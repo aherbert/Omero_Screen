@@ -3,6 +3,7 @@ import logging
 import omero
 from omero_screen.metadata import Defaults, MetaData, ProjectSetup
 from omero_screen.flatfield_corr import flatfieldcorr
+from omero_screen.parse_mip import parse_mip
 from omero_screen.general_functions import (
     save_fig,
     generate_image,
@@ -12,6 +13,7 @@ from omero_screen.general_functions import (
     color_label,
 )
 from omero_screen.omero_functions import upload_masks
+from ezomero import get_image
 
 
 from skimage import measure, io
@@ -59,15 +61,22 @@ class Image:
     def _get_img_dict(self):
         """divide image_array with flatfield correction mask and return dictionary "channel_name": corrected image"""
         img_dict = {}
+        image_id = self.omero_image.getId()
+        if self.omero_image.getSizeZ() > 1:
+            array = parse_mip(image_id, self.dataset_id, self._conn)
+        else:
+            _, array = get_image(self._conn, image_id)
+        
         for channel in list(
-            self.channels.items()
-        ):  # produces a tuple of channel key value pair (ie ('DAPI':0)
+            self.channels.items() # produces a tuple of channel key value pair (ie ('DAPI':0)
+        ):  
             corr_img = (
-                generate_image(self.omero_image, channel[1])
+                array[..., channel[1]]
                 / self._flatfield_dict[channel[0]]
             )
-            # bgcorr_img = corr_img - np.percentile(corr_img, 0.2) +1
             img_dict[channel[0]] = corr_img
+        for img in img_dict.values():
+            print(img.shape)
         return img_dict
 
     def _get_models(self):
@@ -82,16 +91,20 @@ class Image:
         return Defaults["MODEL_DICT"]["U2OS"]
 
     def _n_segmentation(self):
-        """perform cellpose segmentation using nuclear mask"""
         segmentation_model = models.CellposeModel(
             gpu=True if Defaults["GPU"] else torch.cuda.is_available(),
             model_type=Defaults["MODEL_DICT"]["nuclei"],
         )
-        n_channels = [[0, 0]]
-        n_mask_array, n_flows, n_styles = segmentation_model.eval(
-            scale_img(self.img_dict["DAPI"]), channels=n_channels, diameter=10,
-            normalize=False
-        )
+        img_to_analyse = self.img_dict["DAPI"]
+        for i in range(img_to_analyse.shape[0]):
+            array_to_segment = np.squeeze(img_to_analyse[i, ...])
+             """perform cellpose segmentation using nuclear mask"""
+        
+            n_channels = [[0, 0]]
+            n_mask_array, n_flows, n_styles = segmentation_model.eval(
+                scale_img(self.img_dict["DAPI"]), channels=n_channels, diameter=10,
+                normalize=False
+            )
         return filter_segmentation(n_mask_array)
 
     def _c_segmentation(self):
@@ -274,9 +287,9 @@ if __name__ == "__main__":
 
     @omero_connect
     def feature_extraction_test(conn=None):
-        meta_data = MetaData(conn, plate_id=1237)
-        project_data = ProjectSetup(1237, conn)
-        well = conn.getObject("Well", 15401)
+        meta_data = MetaData(conn, plate_id=351)
+        project_data = ProjectSetup(351, conn)
+        well = conn.getObject("Well", 601)
         omero_image = well.getImage(0)
         flatfield_dict = flatfieldcorr(meta_data, project_data, conn)
         image = Image(conn, well, omero_image, meta_data, project_data, flatfield_dict)
