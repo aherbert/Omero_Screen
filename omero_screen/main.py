@@ -16,6 +16,6 @@ def main(plate_id, options=None, conn=None):
 
 
 if __name__ == "__main__":
-    Defaults['server'] = "../data/secrets/config.json"
+    Defaults['server'] = "../data/secrets/config_test.json"
     
-    main(1237)
+    main(352)

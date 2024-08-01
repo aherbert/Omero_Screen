@@ -10,7 +10,7 @@ from omero_screen.general_functions import (
     filter_segmentation,
     omero_connect,
     scale_img,
-    color_label,
+    correct_channel_order,
 )
 from omero_screen.omero_functions import upload_masks
 from ezomero import get_image
@@ -60,6 +60,7 @@ class Image:
 
     def _get_img_dict(self):
         """divide image_array with flatfield correction mask and return dictionary "channel_name": corrected image"""
+        
         img_dict = {}
         image_id = self.omero_image.getId()
         if self.omero_image.getSizeZ() > 1:
@@ -70,13 +71,15 @@ class Image:
         for channel in list(
             self.channels.items() # produces a tuple of channel key value pair (ie ('DAPI':0)
         ):  
+            print(f"shape of flatfieldmasd = {self._flatfield_dict[channel[0]].shape}")
             corr_img = (
                 array[..., channel[1]]
                 / self._flatfield_dict[channel[0]]
             )
-            img_dict[channel[0]] = corr_img
-        for img in img_dict.values():
-            print(img.shape)
+            print(f"shape of corr_img = {corr_img.shape}")
+            img_dict[channel[0]] = np.squeeze(corr_img, axis=1)
+        for key, img in img_dict.items():
+            print(f"{key}: {img.shape}")
         return img_dict
 
     def _get_models(self):
@@ -95,17 +98,29 @@ class Image:
             gpu=True if Defaults["GPU"] else torch.cuda.is_available(),
             model_type=Defaults["MODEL_DICT"]["nuclei"],
         )
-        img_to_analyse = self.img_dict["DAPI"]
-        for i in range(img_to_analyse.shape[0]):
-            array_to_segment = np.squeeze(img_to_analyse[i, ...])
-             """perform cellpose segmentation using nuclear mask"""
-        
+        # Get the image array
+        img_array = self.img_dict["DAPI"]
+    
+        # Initialize an array to store the segmentation masks
+        segmentation_masks = np.zeros_like(img_array)
+
+        for t in range(img_array.shape[0]):
+            # Select the image at the current timepoint
+            img_t = img_array[t]
+            
+            # Prepare the image for segmentation
+            scaled_img_t = scale_img(img_t)
+            
+            # Perform segmentation
             n_channels = [[0, 0]]
             n_mask_array, n_flows, n_styles = segmentation_model.eval(
-                scale_img(self.img_dict["DAPI"]), channels=n_channels, diameter=10,
-                normalize=False
+                scaled_img_t, channels=n_channels, diameter=10, normalize=False
             )
-        return filter_segmentation(n_mask_array)
+            
+            # Store the segmentation mask in the corresponding timepoint
+            segmentation_masks[t] = filter_segmentation(n_mask_array)
+        print(f"shape of n_mask = {segmentation_masks.shape}")
+        return segmentation_masks
 
     def _c_segmentation(self):
         """perform cellpose segmentation using cell mask"""
@@ -114,20 +129,41 @@ class Image:
             model_type=self._get_models(),
         )
         c_channels = [[2, 1]]
-        # combine the 2 channel numpy array for cell segmentation with the nuclei channel
-        comb_image = scale_img(np.dstack ([self.img_dict["DAPI"], self.img_dict["Tub"]]))
-        c_masks_array, c_flows, c_styles = segmentation_model.eval(
-            comb_image, channels=c_channels, normalize=False
-        )
-        # return cleaned up mask using filter function
-        return filter_segmentation(c_masks_array)
+        
+        # Get the image arrays for DAPI and Tubulin channels
+        dapi_array = self.img_dict["DAPI"]
+        tub_array = self.img_dict["Tub"]
+        
+        # Check if the time dimension matches
+        assert dapi_array.shape[0] == tub_array.shape[0], "Time dimension mismatch between DAPI and Tubulin channels"
+        
+        # Initialize an array to store the segmentation masks
+        segmentation_masks = np.zeros_like(dapi_array)
+        
+        # Process each timepoint
+        for t in range(dapi_array.shape[0]):
+            # Select the images at the current timepoint
+            dapi_t = dapi_array[t]
+            tub_t = tub_array[t]
+            
+            # Combine the 2 channel numpy array for cell segmentation with the nuclei channel
+            comb_image_t = scale_img(np.dstack([dapi_t, tub_t]))
+            
+            # Perform segmentation
+            c_masks_array, c_flows, c_styles = segmentation_model.eval(
+                comb_image_t, channels=c_channels, normalize=False
+            )
+            
+            # Store the segmentation mask in the corresponding timepoint
+            segmentation_masks[t] = filter_segmentation(c_masks_array)
+        print(f"shape of c_mask = {segmentation_masks.shape}")
+        return segmentation_masks
+
 
     def _download_masks(self, image_id):
         """Download masks from OMERO server and save as numpy arrays"""
-        masks = self._conn.getObject("Image", image_id)
-        n_mask = generate_image(masks, 0)
-        c_mask = generate_image(masks, 1)
-        return n_mask, c_mask
+        _, masks = get_image(self._conn, image_id)
+        return correct_channel_order(masks)
 
     def _get_cyto(self):
         """substract nuclei mask from cell mask to get cytoplasm mask"""
@@ -154,7 +190,8 @@ class Image:
             upload_masks(
                 self.dataset_id,
                 self.omero_image,
-                [self._n_mask, self._c_mask],
+                self._n_mask, 
+                self._c_mask,
                 self._conn,
             )
         return self._n_mask, self._c_mask, self._cyto_mask
@@ -202,12 +239,34 @@ class ImageProperties:
 
     def _get_properties(self, segmentation_mask, channel, segment, featurelist):
         """Measure selected features for each segmented cell in given channel"""
-        props = measure.regionprops_table(
-            segmentation_mask, self._image.img_dict[channel], properties=featurelist
-        )
-        data = pd.DataFrame(props)
-        feature_dict = self._edit_properties(channel, segment, featurelist)
-        return data.rename(columns=feature_dict)
+        timepoints = self._image.img_dict[channel].shape[0]
+        label = np.squeeze(segmentation_mask).astype(np.int64)
+        print(f"shape of segmentation_mask = {label.shape})")
+        print(f"type of label = {label.dtype}")
+        print(f"shape of image = {self._image.img_dict[channel].shape}")
+        if timepoints > 1:
+            data_list = []
+            for t in range(timepoints):
+                props = measure.regionprops_table(
+                    label[t], np.squeeze(self._image.img_dict[channel][t]), properties=featurelist
+                )
+                data = pd.DataFrame(props)
+                feature_dict = self._edit_properties(channel, segment, featurelist)
+                data = data.rename(columns=feature_dict)
+                data['timepoint'] = t  # Add timepoint for all channels
+                data_list.append(data)
+            combined_data = pd.concat(data_list, axis=0, ignore_index=True)
+            return combined_data.sort_values(by=['timepoint', 'label']).reset_index(drop=True)
+        else:
+            print("single timepoint")
+            props = measure.regionprops_table(
+                label, np.squeeze(self._image.img_dict[channel]), properties=featurelist
+            )
+            data = pd.DataFrame(props)
+            feature_dict = self._edit_properties(channel, segment, featurelist)
+            data = data.rename(columns=feature_dict)
+            data['timepoint'] = 0  # Add timepoint 0 for single timepoint data
+            return data.sort_values(by=['label']).reset_index(drop=True)
 
     def _channel_data(self, channel, featurelist):
         nucleus_data = self._get_properties(
@@ -228,11 +287,11 @@ class ImageProperties:
         cyto_data = self._get_properties(
             self._image.cyto_mask, channel, "cyto", featurelist
         )
-        merge_1 = pd.merge(cell_data, cyto_data, how="outer", on=["label"]).dropna(
+        merge_1 = pd.merge(cell_data, cyto_data, how="outer", on=["label", "timepoint"]).dropna(
             axis=0, how="any"
         )
         merge_1 = merge_1.rename(columns={"label": "Cyto_ID"})
-        return pd.merge(nucleus_data, merge_1, how="outer", on=["Cyto_ID"]).dropna(
+        return pd.merge(nucleus_data, merge_1, how="outer", on=["Cyto_ID", "timepoint"]).dropna(
             axis=0, how="any"
         )
 
@@ -256,7 +315,7 @@ class ImageProperties:
         col_list_edited = [entry.lower() for entry in col_list]
         edited_props_data[col_list_edited] = cond_list
 
-        return edited_props_data
+        return edited_props_data.sort_values(by=['timepoint']).reset_index(drop=True)
 
     def _set_quality_df(self, channel, corr_img):
         """generates df for image quality control saving the median intensity of the image"""
@@ -287,17 +346,20 @@ if __name__ == "__main__":
 
     @omero_connect
     def feature_extraction_test(conn=None):
-        meta_data = MetaData(conn, plate_id=351)
-        project_data = ProjectSetup(351, conn)
-        well = conn.getObject("Well", 601)
-        omero_image = well.getImage(0)
+        meta_data = MetaData(conn, plate_id=352)
+        project_data = ProjectSetup(352, conn)
+        well = conn.getObject("Well", 604)
+        omero_image = well.getImage(2)
         flatfield_dict = flatfieldcorr(meta_data, project_data, conn)
         image = Image(conn, well, omero_image, meta_data, project_data, flatfield_dict)
+        image_data = ImageProperties(well, image, meta_data)
         print(image.n_mask.shape)
-        # image_data = ImageProperties(well, image, meta_data, exp_paths)
-        # image.segmentation_figure()
-        # df_final = image_data.image_df
-        # df_final = pd.concat([df_final.loc[:, 'experiment':], df_final.loc[:, :'experiment']], axis=1).iloc[:, :-1]
-        # print(df_final)
+        df_image = image_data.image_df
+        print(df_image.head())
+        print(df_image.columns)
+        df_image.to_csv("~/Desktop/image_data.csv")
+  
+        
+        
 
     feature_extraction_test()

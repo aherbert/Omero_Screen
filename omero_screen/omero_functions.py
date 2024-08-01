@@ -1,8 +1,10 @@
 from pathlib import Path
 import omero
+import time
 import tempfile
 from omero_screen.general_functions import save_fig
-from omero.gateway import BlitzGateway
+from omero.gateway import BlitzGateway, MapAnnotationWrapper
+
 
 
 # file_path = Path('./data/metadata.xlsx')
@@ -236,7 +238,8 @@ def remove_map_annotations(omero_object):
     omero_object.save()
 
 
-def upload_masks(dataset_id, omero_image, array_list, conn):
+
+def upload_masks(dataset_id, omero_image, n_mask, c_mask, conn):
     """
     Uploads generated images to OMERO server and links them to the specified dataset.
     The id of the mask is stored as an annotation on the original screen image.
@@ -252,12 +255,14 @@ def upload_masks(dataset_id, omero_image, array_list, conn):
     dataset = conn.getObject("Dataset", dataset_id)
 
     def plane_gen():
-        """Generator that yields each plane in the array_list"""
-        yield from array_list
+        """Generator that yields each plane in the n_mask and c_mask arrays"""
+        for i in range(n_mask.shape[0]):
+            yield n_mask[i]
+            yield c_mask[i]
 
     # Create the image in the dataset
     mask = conn.createImageFromNumpySeq(
-        plane_gen(), image_name, 1, len(array_list), 1, dataset=dataset
+        plane_gen(), image_name, 1, 2, n_mask.shape[0], dataset=dataset
     )
 
     # Create a map annotation to store the segmentation mask ID
@@ -273,7 +278,7 @@ def upload_masks(dataset_id, omero_image, array_list, conn):
             if "Segmentation_Mask" in ann_values:  # If the desired annotation exists
                 conn.deleteObject(ann._obj)  # Delete the existing annotation
     # Create a new map annotation
-    map_ann = omero.gateway.MapAnnotationWrapper(conn)
+    map_ann = MapAnnotationWrapper(conn)
     map_ann.setNs(omero.constants.metadata.NSCLIENTMAPANNOTATION)
     map_ann.setValue(key_value_data)
 

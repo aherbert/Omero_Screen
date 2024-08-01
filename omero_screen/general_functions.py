@@ -234,3 +234,33 @@ def load_mip(conn: BlitzGateway, image: _ImageWrapper, dataset: _DatasetWrapper 
         img_gen, mip_name, 1, channel_num, 1, dataset=dataset
     )
     add_map_annotation(image, mip_name, conn=conn)
+
+def correct_channel_order(image_array):
+    """
+    Corrects the channel order in a time series image array where the channels are switched
+    for even time points.
+
+    Parameters:
+    image_array (numpy array): The input image array with shape (T, Z, Y, X, C)
+                               where T is the number of time points, Z is the number of z-planes,
+                               Y is the height, X is the width, and C is the number of channels.
+
+    Returns:
+    corrected_n_mask (numpy array): The corrected time series for the first channel (nuclei segmentation mask).
+    corrected_c_mask (numpy array): The corrected time series for the second channel (cell segmentation mask).
+    """
+    T, Z, Y, X, C = image_array.shape
+    assert C == 2, "The function expects exactly 2 channels."
+
+    corrected_n_mask = np.empty((T, Z, Y, X), dtype=image_array.dtype)
+    corrected_c_mask = np.empty((T, Z, Y, X), dtype=image_array.dtype)
+
+    for t in range(T):
+        if t % 2 == 0:  # even time points
+            corrected_c_mask[t] = image_array[t, :, :, :, 1]  # c_mask is actually in the first channel
+            corrected_n_mask[t] = image_array[t, :, :, :, 0]  # n_mask is actually in the second channel
+        else:  # odd time points
+            corrected_c_mask[t] = image_array[t, :, :, :, 0]  # n_mask is in the first channel
+            corrected_n_mask[t] = image_array[t, :, :, :, 1]  # c_mask is in the second channel
+
+    return corrected_n_mask, corrected_c_mask
