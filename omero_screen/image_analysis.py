@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 import logging
-import omero
 from omero_screen.metadata import Defaults, MetaData, ProjectSetup
 from omero_screen.flatfield_corr import flatfieldcorr
 from omero_screen.parse_mip import parse_mip
 from omero_screen.general_functions import (
-    save_fig,
-    generate_image,
     filter_segmentation,
     omero_connect,
     scale_img,
@@ -15,14 +12,12 @@ from omero_screen.general_functions import (
 from omero_screen.omero_functions import upload_masks
 from ezomero import get_image
 
-
-from skimage import measure, io
+from skimage import measure
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+
 import torch
 from cellpose import models
-
 
 logger = logging.getLogger("omero-screen")
 
@@ -54,13 +49,11 @@ class Image:
                 "Cell_Line"
             ]
 
-        # self.condition = self._meta_data.well_conditions(self._well.getId())['condition']
         row_list = list("ABCDEFGHIJKL")
         self.well_pos = f"{row_list[self._well.row]}{self._well.column}"
 
     def _get_img_dict(self):
-        """divide image_array with flatfield correction mask and return dictionary "channel_name": corrected image"""
-        
+        """divide image_array with flatfield correction mask and return dictionary "channel_name": corrected image""" 
         img_dict = {}
         image_id = self.omero_image.getId()
         if self.omero_image.getSizeZ() > 1:
@@ -68,18 +61,9 @@ class Image:
         else:
             _, array = get_image(self._conn, image_id)
         
-        for channel in list(
-            self.channels.items() # produces a tuple of channel key value pair (ie ('DAPI':0)
-        ):  
-            print(f"shape of flatfieldmasd = {self._flatfield_dict[channel[0]].shape}")
-            corr_img = (
-                array[..., channel[1]]
-                / self._flatfield_dict[channel[0]]
-            )
-            print(f"shape of corr_img = {corr_img.shape}")
+        for channel in list(self.channels.items()):
+            corr_img = array[..., channel[1]] / self._flatfield_dict[channel[0]]
             img_dict[channel[0]] = np.squeeze(corr_img, axis=1)
-        for key, img in img_dict.items():
-            print(f"{key}: {img.shape}")
         return img_dict
 
     def _get_models(self):
@@ -119,7 +103,6 @@ class Image:
             
             # Store the segmentation mask in the corresponding timepoint
             segmentation_masks[t] = filter_segmentation(n_mask_array)
-        print(f"shape of n_mask = {segmentation_masks.shape}")
         return segmentation_masks
 
     def _c_segmentation(self):
@@ -156,20 +139,20 @@ class Image:
             
             # Store the segmentation mask in the corresponding timepoint
             segmentation_masks[t] = filter_segmentation(c_masks_array)
-        print(f"shape of c_mask = {segmentation_masks.shape}")
         return segmentation_masks
-
 
     def _download_masks(self, image_id):
         """Download masks from OMERO server and save as numpy arrays"""
         _, masks = get_image(self._conn, image_id)
-        return correct_channel_order(masks)
+        return correct_channel_order(masks) if masks.shape[-1] == 2 else masks
 
     def _get_cyto(self):
         """substract nuclei mask from cell mask to get cytoplasm mask"""
-        overlap = (self._c_mask != 0) * (self._n_mask != 0)
-        cyto_mask_binary = (self._c_mask != 0) * (overlap == 0)
-        return self._c_mask * cyto_mask_binary
+        if self.c_mask is None:
+            return None
+        overlap = (self.c_mask != 0) * (self.n_mask != 0)
+        cyto_mask_binary = (self.c_mask != 0) * (overlap == 0)
+        return self.c_mask * cyto_mask_binary
 
     def _segmentation(self):
         # check if masks already exist
@@ -180,21 +163,31 @@ class Image:
         for image in dataset.listChildren():
             if image.getName() == image_name:
                 image_id = image.getId()
-                print(f"Found image with ID: {image_id}")
-                self._n_mask, self._c_mask = self._download_masks(image_id)
-                self._cyto_mask = self._get_cyto()
+                if "Tub" in self.channels:
+                    self.n_mask, self.c_mask = self._download_masks(image_id)
+                    self.cyto_mask = self._get_cyto()
+                else:
+                    self.n_mask = self._download_masks(image_id)
+                    self.c_mask = None
+                    self.cyto_mask = None
                 break  # stop the loop once the image is found
         if image_id is None:
-            self._n_mask, self._c_mask = self._n_segmentation(), self._c_segmentation()
-            self._cyto_mask = self._get_cyto()
+            self.n_mask = self._n_segmentation()
+            if "Tub" in self.channels:
+                self.c_mask = self._c_segmentation()
+                self.cyto_mask = self._get_cyto()
+            else:
+                self.c_mask = None
+                self.cyto_mask = None
+            
             upload_masks(
                 self.dataset_id,
                 self.omero_image,
-                self._n_mask, 
-                self._c_mask,
+                self.n_mask,
+                self.c_mask,
                 self._conn,
             )
-        return self._n_mask, self._c_mask, self._cyto_mask
+        return self.n_mask, self.c_mask, self.cyto_mask
 
 
 class ImageProperties:
@@ -216,6 +209,9 @@ class ImageProperties:
 
     def _overlay_mask(self) -> pd.DataFrame:
         """Links nuclear IDs with cell IDs"""
+        if self._image.c_mask is None:
+            return pd.DataFrame({"label": self._image.n_mask.flatten()})
+        
         overlap = (self._image.c_mask != 0) * (self._image.n_mask != 0)
         list_n_masks = np.stack(
             [self._image.n_mask[overlap], self._image.c_mask[overlap]]
@@ -241,9 +237,7 @@ class ImageProperties:
         """Measure selected features for each segmented cell in given channel"""
         timepoints = self._image.img_dict[channel].shape[0]
         label = np.squeeze(segmentation_mask).astype(np.int64)
-        print(f"shape of segmentation_mask = {label.shape})")
-        print(f"type of label = {label.dtype}")
-        print(f"shape of image = {self._image.img_dict[channel].shape}")
+        
         if timepoints > 1:
             data_list = []
             for t in range(timepoints):
@@ -258,7 +252,6 @@ class ImageProperties:
             combined_data = pd.concat(data_list, axis=0, ignore_index=True)
             return combined_data.sort_values(by=['timepoint', 'label']).reset_index(drop=True)
         else:
-            print("single timepoint")
             props = measure.regionprops_table(
                 label, np.squeeze(self._image.img_dict[channel]), properties=featurelist
             )
@@ -273,27 +266,32 @@ class ImageProperties:
             self._image.n_mask, channel, "nucleus", featurelist
         )
         # merge channel data, outer merge combines all area columns into 1
-        nucleus_data = pd.merge(
-            nucleus_data, self._overlay, how="outer", on=["label"]
-        ).dropna(axis=0, how="any")
+        if self._image.c_mask is not None:
+            nucleus_data = pd.merge(
+                nucleus_data, self._overlay, how="outer", on=["label"]
+            ).dropna(axis=0, how="any")
         if channel == "DAPI":
             nucleus_data["integrated_int_DAPI"] = (
                 nucleus_data["intensity_mean_DAPI_nucleus"]
                 * nucleus_data["area_nucleus"]
             )
-        cell_data = self._get_properties(
-            self._image.c_mask, channel, "cell", featurelist
-        )
-        cyto_data = self._get_properties(
-            self._image.cyto_mask, channel, "cyto", featurelist
-        )
-        merge_1 = pd.merge(cell_data, cyto_data, how="outer", on=["label", "timepoint"]).dropna(
-            axis=0, how="any"
-        )
-        merge_1 = merge_1.rename(columns={"label": "Cyto_ID"})
-        return pd.merge(nucleus_data, merge_1, how="outer", on=["Cyto_ID", "timepoint"]).dropna(
-            axis=0, how="any"
-        )
+        
+        if self._image.c_mask is not None:
+            cell_data = self._get_properties(
+                self._image.c_mask, channel, "cell", featurelist
+            )
+            cyto_data = self._get_properties(
+                self._image.cyto_mask, channel, "cyto", featurelist
+            )
+            merge_1 = pd.merge(cell_data, cyto_data, how="outer", on=["label", "timepoint"]).dropna(
+                axis=0, how="any"
+            )
+            merge_1 = merge_1.rename(columns={"label": "Cyto_ID"})
+            return pd.merge(nucleus_data, merge_1, how="outer", on=["Cyto_ID", "timepoint"]).dropna(
+                axis=0, how="any"
+            )
+        else:
+            return nucleus_data
 
     def _combine_channels(self, featurelist):
         channel_data = [
@@ -340,8 +338,6 @@ class ImageProperties:
 
 
 # test
-
-
 if __name__ == "__main__":
 
     @omero_connect
@@ -358,8 +354,5 @@ if __name__ == "__main__":
         print(df_image.head())
         print(df_image.columns)
         df_image.to_csv("~/Desktop/image_data.csv")
-  
-        
-        
 
     feature_extraction_test()

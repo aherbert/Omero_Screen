@@ -30,14 +30,8 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict):
     image_number = len(list(well.listChildren()))
     for number in tqdm.tqdm(range(image_number)):
         omero_img = well.getImage(number)
-        if "Tub" in metadata.channels.keys():
-            image = Image(conn, well, omero_img, metadata, project_data, flatfield_dict)
-            image_data = ImageProperties(well, image, metadata)
-        else:
-            image = NucImage(
-                conn, well, omero_img, metadata, project_data, flatfield_dict
-            )
-            image_data = NucImageProperties(well, image, metadata)
+        image = Image(conn, well, omero_img, metadata, project_data, flatfield_dict)
+        image_data = ImageProperties(well, image, metadata)
         df_image = image_data.image_df
         df_image_quality = image_data.quality_df
         df_well = pd.concat([df_well, df_image])

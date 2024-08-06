@@ -239,14 +239,18 @@ def remove_map_annotations(omero_object):
 
 
 
-def upload_masks(dataset_id, omero_image, n_mask, c_mask, conn):
+def upload_masks(dataset_id, omero_image, n_mask, c_mask=None, conn=None):
     """
     Uploads generated images to OMERO server and links them to the specified dataset.
     The id of the mask is stored as an annotation on the original screen image.
 
     Parameters:
+    dataset_id (int): ID of the dataset to link the masks to
+    omero_image (omero.gateway._ImageWrapper): Original image object
     n_mask (numpy array): Nuclei segmentation mask
-    c_mask (numpy array): Cell segmentation mask
+    c_mask (numpy array, optional): Cell segmentation mask. Defaults to None.
+    conn (BlitzGateway): OMERO connection
+
     Returns:
     None. The image is saved to the OMERO server and linked to the specified dataset.
     """
@@ -258,11 +262,13 @@ def upload_masks(dataset_id, omero_image, n_mask, c_mask, conn):
         """Generator that yields each plane in the n_mask and c_mask arrays"""
         for i in range(n_mask.shape[0]):
             yield n_mask[i]
-            yield c_mask[i]
+            if c_mask is not None:
+                yield c_mask[i]
 
     # Create the image in the dataset
+    num_channels = 2 if c_mask is not None else 1
     mask = conn.createImageFromNumpySeq(
-        plane_gen(), image_name, 1, 2, n_mask.shape[0], dataset=dataset
+        plane_gen(), image_name, 1, num_channels, n_mask.shape[0], dataset=dataset
     )
 
     # Create a map annotation to store the segmentation mask ID
