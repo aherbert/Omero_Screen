@@ -48,7 +48,7 @@ def plate_loop(plate_id: int, conn: BlitzGateway):
     """
     logger.info(f"Processing plate {plate_id}")
     metadata = MetaData(conn, plate_id=plate_id)
-    logger.debug(f"Chennel Metadata: {metadata.channels}")
+    logger.debug(f"Channel Metadata: {metadata.channels}")
     plate_name = metadata.plate_obj.getName()
     project_data = ProjectSetup(plate_id, conn)
     flatfield_dict = flatfieldcorr(metadata, project_data, conn)

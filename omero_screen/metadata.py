@@ -200,5 +200,5 @@ class ProjectSetup:
             link.setChild(omero.model.DatasetI(new_dataset_id, False))
             link.setParent(omero.model.ProjectI(Defaults["PROJECT_ID"], False))
             self.conn.getUpdateService().saveObject(link)
-            print(f"Dataset {new_dataset.getName()} created and linked to Screens project")
+            print(f"Dataset {new_dataset_id} created and linked to Screens project")
             return new_dataset_id
