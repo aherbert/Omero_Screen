@@ -19,6 +19,7 @@ if __name__ == "__main__":
         action="store_true",
         help="add non cuda GPU option to Cellpose",
     )
+    
     args = parser.parse_args()
 
     # Create overrides

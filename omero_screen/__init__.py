@@ -37,18 +37,16 @@ logger = logging.getLogger("omero-screen")
 
 # Derive the absolute path to the config.json file
 current_dir = pathlib.Path(__file__).parent
-config_path = current_dir / "../data/secrets/config_test.json"
+config_path = current_dir / "../data/secrets/config.json"
 try:
-    with open(
-        config_path
-    ) as file:
+    with open(config_path) as file:
         server_data = True
         data = json.load(file)
         username = data["username"]
         password = data["password"]
         server = data["server"]
         project = data["project"]
-        logger.info("Successfully loaded server data")
+        logger.info(f"Successfully loaded server data for {server}")
 except IOError:
     server_data = False
     username = "invalid"
@@ -86,7 +84,7 @@ Defaults = {
         "GWL_MM231": "MM231_Tub_Hoechst",
         "RPE1WT": "RPE-1_Tub_Hoechst",
         "RPE1P53KO": "RPE-1_Tub_Hoechst",
-        "RPE1wt_PALB": "only_PALB"
+        "RPE1wt_PALB": "only_PALB",
     },
     "NS": "openmicroscopy.org/omero/client/mapAnnotation",
     "FEATURELIST": [
@@ -104,4 +102,5 @@ Defaults = {
     "SERVER": server,
     "PROJECT_ID": project,
     "GPU": None,
+    "MAGNIFICATION": "10x",
 }

@@ -34,6 +34,7 @@ class Image:
         self._meta_data = metadata
         self.dataset_id = project_data.dataset_id
         self._get_metadata()
+        self.nuc_diameter = 10 # default value for nuclei diameter for 10x images
         self._flatfield_dict = flatfield_dict
         self.img_dict = self._get_img_dict()
         self.n_mask, self.c_mask, self.cyto_mask = self._segmentation()
@@ -73,11 +74,18 @@ class Image:
         :return: path to model (str)
         """
         cell_line = self.cell_line.replace(" ", "").upper() # remove spaces and make uppercase
-        if cell_line in Defaults["MODEL_DICT"]:
+        if '40X' in cell_line:
+            logger.info("40x image detected, using 40x nuclei model")
+            return "40x_Tub_H2B"
+        elif cell_line in Defaults["MODEL_DICT"]:
             return Defaults["MODEL_DICT"][cell_line]
-        return Defaults["MODEL_DICT"]["U2OS"]
+        else:
+            return Defaults["MODEL_DICT"]["U2OS"]
+        
 
     def _n_segmentation(self):
+        if '40X' in self.cell_line.upper():
+            self.nuc_diameter = 100
         segmentation_model = models.CellposeModel(
             gpu=True if Defaults["GPU"] else torch.cuda.is_available(),
             model_type=Defaults["MODEL_DICT"]["nuclei"],
@@ -97,8 +105,9 @@ class Image:
             
             # Perform segmentation
             n_channels = [[0, 0]]
+            logger.info(f"Segmenting nuclei with diamtere {self.nuc_diameter}")
             n_mask_array, n_flows, n_styles = segmentation_model.eval(
-                scaled_img_t, channels=n_channels, diameter=10, normalize=False
+                scaled_img_t, channels=n_channels, diameter=self.nuc_diameter, normalize=False
             )
             
             # Store the segmentation mask in the corresponding timepoint
@@ -163,6 +172,7 @@ class Image:
         for image in dataset.listChildren():
             if image.getName() == image_name:
                 image_id = image.getId()
+                logger.info(f"Segmentation masks found for image {image_id}")
                 if "Tub" in self.channels:
                     self.n_mask, self.c_mask = self._download_masks(image_id)
                     self.cyto_mask = self._get_cyto()
