@@ -77,6 +77,9 @@ class Image:
         if '40X' in cell_line:
             logger.info("40x image detected, using 40x nuclei model")
             return "40x_Tub_H2B"
+        elif '20X' in cell_line:
+            logger.info("20x image detected, using 20x nuclei model")
+            return "cyto"
         elif cell_line in Defaults["MODEL_DICT"]:
             return Defaults["MODEL_DICT"][cell_line]
         else:
@@ -86,6 +89,10 @@ class Image:
     def _n_segmentation(self):
         if '40X' in self.cell_line.upper():
             self.nuc_diameter = 100
+        elif '20X' in self.cell_line.upper():
+            self.nuc_diameter = 25
+        else:
+            self.nuc_diameter = 10
         segmentation_model = models.CellposeModel(
             gpu=True if Defaults["GPU"] else torch.cuda.is_available(),
             model_type=Defaults["MODEL_DICT"]["nuclei"],
