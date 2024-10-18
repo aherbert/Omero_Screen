@@ -37,7 +37,7 @@ logger = logging.getLogger("omero-screen")
 
 # Derive the absolute path to the config.json file
 current_dir = pathlib.Path(__file__).parent
-config_path = current_dir / "../data/secrets/config_test.json"
+config_path = current_dir / "../data/secrets/config.json"
 try:
     with open(config_path) as file:
         server_data = True
