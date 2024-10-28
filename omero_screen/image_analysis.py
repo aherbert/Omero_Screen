@@ -12,12 +12,20 @@ from omero_screen.general_functions import (
 from omero_screen.omero_functions import upload_masks
 from ezomero import get_image
 
-from skimage import measure
+from skimage import measure, io
+from skimage.measure import label, regionprops
 import pandas as pd
 import numpy as np
 
 import torch
 from cellpose import models
+
+from PIL import Image as PILImage
+from torchvision import models as torch_models
+import torch.nn as nn
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
 
 logger = logging.getLogger("omero-screen")
 
@@ -228,6 +236,7 @@ class ImageProperties:
         self._overlay = self._overlay_mask()
         self.image_df = self._combine_channels(featurelist)
         self.quality_df = self._concat_quality_df()
+        self._classify_image(image_obj.img_dict, self.image_df, image_obj.c_mask)
 
     def _overlay_mask(self) -> pd.DataFrame:
         """Links nuclear IDs with cell IDs"""
@@ -357,6 +366,183 @@ class ImageProperties:
             for channel, image in self._image.img_dict.items()
         ]
         return pd.concat(df_list)
+
+
+    def _crop_image(self, image, x0, y0, x1, y1):
+        """
+        Crops the input image using the provided coordinates.
+        
+        Args:
+            image (numpy array): The image to be cropped.
+            x0, y0 (int): Top-left coordinates for cropping.
+            x1, y1 (int): Bottom-right coordinates for cropping.
+        
+        Returns:
+            Cropped image as a numpy array.
+        """
+        # Ensure coordinates are valid
+        if x1 < x0:
+            x0, x1 = x1, x0  # Swap values if x1 is less than x0
+        if y1 < y0:
+            y0, y1 = y1, y0  # Swap values if y1 is less than y0
+
+        # Convert image to PIL format if it's a numpy array
+        if isinstance(image, np.ndarray):
+            image = PILImage.fromarray(image)
+        
+        # Crop the image using the corrected coordinates
+        cropped_image = image.crop((x0, y0, x1, y1))
+        
+        # Convert back to numpy array for further processing
+        return np.array(cropped_image)
+    
+    def erase_masks(self, cropped_label: np.ndarray) -> np.ndarray:
+        """
+        Erases all masks in the cropped_label that do not overlap with the centroid.
+        """
+
+        center_row, center_col = np.array(cropped_label.shape) // 2
+
+        unique_labels = np.unique(cropped_label)
+        for unique_label in unique_labels:
+            if unique_label == 0:  # Skip background
+                continue
+
+            binary_mask = cropped_label == unique_label
+
+            if np.sum(binary_mask) == 0:  # Check for empty masks
+                continue
+
+            label_props = regionprops(label(binary_mask))
+
+            if len(label_props) == 1:
+                cropped_centroid_row, cropped_centroid_col = label_props[
+                    0
+                ].centroid
+
+                # Using a small tolerance value for comparing centroids
+                tol = 15
+
+                if (
+                    abs(cropped_centroid_row - center_row) > tol
+                    or abs(cropped_centroid_col - center_col) > tol
+                ):
+                    cropped_label[binary_mask] = 0
+
+        return cropped_label
+    
+    def _apply_mask_to_image(self, rgb_image, mask, x0, y0, x1, y1):
+        """
+        Nullify pixels in color images that don't overlap with the corresponding masks.
+        Images are expected to be in the shape of (H, W, 3) and masks in the shape of (H, W).
+        """
+
+        cropped_mask = self._crop_image(mask, x0, y0, x1, y1) #mask[:rgb_image.shape[1], :rgb_image.shape[0]]
+        corrected_mask = self.erase_masks(cropped_mask)
+        expanded_mask = np.repeat(corrected_mask[:, :, np.newaxis], rgb_image.shape[2], axis=2)
+        masked_image = np.where(expanded_mask > 0, rgb_image, 0)
+
+        return masked_image
+
+    def _classify_image(self, image_data, image_df, mask):
+
+        # Extract the DAPI and TuB channels from image_data
+        dapi_image = image_data['DAPI']
+        tub_image = image_data['Tub']
+        edu_image = image_data['EdU']
+
+        predicted_classes = []
+
+        for i in tqdm(range(len(image_df["centroid-0_x"]))):
+
+            # Center the crop around the centroid coordinates with a 100x100 area
+            half_crop_size = 50  # Half of 100 to create a centered crop
+
+            # Calculate preliminary crop coordinates
+            x0 = int(image_df["centroid-1"][i] - half_crop_size)
+            y0 = int(image_df["centroid-0"][i] - half_crop_size)
+            x1 = int(image_df["centroid-1"][i] + half_crop_size)
+            y1 = int(image_df["centroid-0"][i] + half_crop_size)
+
+            # Ensure crop coordinates are within image bounds
+            x0 = max(0, x0)
+            y0 = max(0, y0)
+            x1 = min(dapi_image.shape[1], x1)  # width limit
+            y1 = min(dapi_image.shape[0], y1)  # height limit
+
+            # Crop DAPI and TuB images
+            cropped_dapi = self._crop_image(dapi_image, x0, y0, x1, y1)
+            cropped_tub = self._crop_image(tub_image, x0, y0, x1, y1)
+            cropped_edu = self._crop_image(edu_image, x0, y0, x1, y1)
+
+            # Normalize the cropped images for better visualization
+            dapi_normalized = (cropped_dapi - cropped_dapi.min()) / (cropped_dapi.max() - cropped_dapi.min())
+            tub_normalized = (cropped_tub - cropped_tub.min()) / (cropped_tub.max() - cropped_tub.min())
+            edu_normalized = (cropped_edu - cropped_edu.min()) / (cropped_edu.max() - cropped_edu.min())
+
+            # Create an RGB image with the same size as the cropped images
+            rgb_image = np.zeros((dapi_normalized.shape[0], dapi_normalized.shape[1], 3))
+            
+            # Assign DAPI to red channel and TuB to green channel
+            rgb_image[:, :, 0] = dapi_normalized  # Red channel for DAPI
+            rgb_image[:, :, 1] = tub_normalized   # Green channel for TuB
+            rgb_image[:, :, 2] = edu_normalized
+
+            cell_image = self._apply_mask_to_image(rgb_image, mask, x0, y0, x1, y1)
+
+            channels = np.stack([cell_image[:, : , 0], cell_image[:, : , 1]], axis=0)
+
+            image_tensor = torch.tensor(channels, dtype=torch.float32)
+
+            image_tensor = image_tensor.unsqueeze(0)  # shape: (1, 2, height, width)
+
+            device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+            image_tensor = image_tensor.to(device)
+
+            # Load the model
+            model = ROIBasedDenseNetModel(num_classes=7)
+            model.load_state_dict(torch.load("roi_based_densenet_model.pth", weights_only=True))
+            model = model.to(device)
+            model.eval()
+
+            with torch.no_grad():
+                outputs = model(image_tensor)
+                _, predicted = torch.max(outputs, 1)
+
+            # print(f"Predicted class: {predicted.item()}")
+
+            class_names = ['anaphase', 'interphase', 'metaphase', 'multipolar', 'prometaphase', 'prophase', 'telophase']
+
+            predicted_classes.append(class_names[int(predicted.item())])
+            
+        self.image_df["Class"] = predicted_classes
+
+
+class ROIBasedDenseNetModel(nn.Module):
+    def __init__(self, num_classes):
+        super(ROIBasedDenseNetModel, self).__init__()
+
+        # Pretrained DenseNet model
+        self.roi_model = torch_models.densenet121(pretrained=True)
+        self.roi_model.features.conv0 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)  # Set the number of input channels to 2
+        self.roi_model.features.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Downsample output to a fixed size
+        num_features_roi = self.roi_model.classifier.in_features
+        self.roi_model.classifier = nn.Identity()  # Remove the final layer
+
+        # Fully connected layers
+        self.fc1 = nn.Linear(num_features_roi, 512)
+        self.fc2 = nn.Linear(512, num_classes)
+
+    def forward(self, roi):
+        # Feature extraction from the ROI
+        roi_features = self.roi_model.features(roi)
+        roi_features = torch.flatten(roi_features, 1)  # Flattening
+
+        # Classification through fully connected layers
+        x = torch.relu(self.fc1(roi_features))
+        x = self.fc2(x)
+        return x
+
 
 
 # test
