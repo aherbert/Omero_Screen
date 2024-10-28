@@ -25,6 +25,7 @@ from torchvision import models as torch_models
 import torch.nn as nn
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import os
 
 
 logger = logging.getLogger("omero-screen")
@@ -431,6 +432,51 @@ class ImageProperties:
 
         return cropped_label
     
+    @omero_connect
+    def _load_model_from_omero(self, project_name, dataset_name, model_filename, conn=None):
+
+        # Check if the model already exists locally
+        file_path = f"./{model_filename}"
+        if os.path.exists(file_path):
+            print(f"Model file '{model_filename}' already exists locally.")
+            # Mevcut dosyayı yükleyin
+            model = ROIBasedDenseNetModel(num_classes=7)
+            model.load_state_dict(torch.load(file_path, weights_only=True))
+            model.eval()
+            return model
+
+        # Find project
+        project = conn.getObject("Project", attributes={"name": project_name})
+        if project is None:
+            raise ValueError(f"Project '{project_name}' not found in OMERO.")
+        
+        # Find dataset
+        dataset = None
+        for ds in project.listChildren():
+            if ds.getName() == dataset_name:
+                dataset = ds
+                break
+        if dataset is None:
+            raise ValueError(f"Dataset '{dataset_name}' not found in project '{project_name}'.")
+
+        for attachment in dataset.listAnnotations():
+            if isinstance(attachment, omero.gateway.FileAnnotationWrapper):
+                if attachment.getFileName() == model_filename:
+                    # Download the model
+                    file_path = f"./{model_filename}"
+                    with open(file_path, "wb") as f:
+                        for chunk in attachment.getFileInChunks():
+                            f.write(chunk)
+                    print(f"Downloaded model file to {file_path}")
+
+                    # Load the downloaded model
+                    model = ROIBasedDenseNetModel(num_classes=7)
+                    model.load_state_dict(torch.load(file_path, weights_only=True))
+                    model.eval()
+                    return model
+
+        raise FileNotFoundError(f"File '{model_filename}' not found in dataset '{dataset_name}' under project '{project_name}'.")
+    
     def _apply_mask_to_image(self, rgb_image, mask, x0, y0, x1, y1):
         """
         Nullify pixels in color images that don't overlap with the corresponding masks.
@@ -453,7 +499,13 @@ class ImageProperties:
 
         predicted_classes = []
 
-        for i in tqdm(range(len(image_df["centroid-0_x"]))):
+        device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+
+        model = self._load_model_from_omero("CNN_Models", "ROI_Based_DenseNet", "roi_based_densenet_model.pth")
+        model = model.to(device)
+        model.eval()
+
+        for i in tqdm(range(len(image_df["centroid-0"]))):
 
             # Center the crop around the centroid coordinates with a 100x100 area
             half_crop_size = 50  # Half of 100 to create a centered crop
@@ -496,14 +548,11 @@ class ImageProperties:
 
             image_tensor = image_tensor.unsqueeze(0)  # shape: (1, 2, height, width)
 
-            device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
             image_tensor = image_tensor.to(device)
 
             # Load the model
-            model = ROIBasedDenseNetModel(num_classes=7)
-            model.load_state_dict(torch.load("roi_based_densenet_model.pth", weights_only=True))
-            model = model.to(device)
-            model.eval()
+            # model = ROIBasedDenseNetModel(num_classes=7)
+            # model.load_state_dict(torch.load("roi_based_densenet_model.pth", weights_only=True))
 
             with torch.no_grad():
                 outputs = model(image_tensor)
