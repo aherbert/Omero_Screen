@@ -19,7 +19,6 @@ is correctly configured.
 
 import getpass
 import argparse
-from smtplib import SMTP
 
 # Gather our code in a main() function
 def main():
@@ -40,14 +39,10 @@ def main():
   group.add_argument('-f', '--filename', dest='file', metavar='FILE',
     default=None,
     help='e-mail message text file (overrides other arguments)')
+  group.add_argument('--smtp', action='store_true', default=False,
+    help='Use SMTP lib (default is sendmail)')
 
   args = parser.parse_args()
-
-  from_addr = args.sender
-  to_addrs = []
-
-  for arg in args.address:
-    to_addrs.append(arg)
 
   if args.file:
     with open(args.file, 'r') as file:
@@ -58,11 +53,35 @@ def main():
 {args.message}
 """
 
-  with SMTP("localhost") as smtp:
-    # This method will return normally if the mail is accepted for at
-    # least one recipient (i.e. someone should get your mail).
-    # Otherwise it will raise an exception.
-    smtp.sendmail(from_addr, to_addrs, message)
+  if args.smtp:
+    from smtplib import SMTP
+    with SMTP("localhost") as smtp:
+      # This method will return normally if the mail is accepted for at
+      # least one recipient (i.e. someone should get your mail).
+      # Otherwise it will raise an exception.
+      smtp.sendmail(args.sender, args.address, message)
+  else:
+    # Find full path to sendmail
+    from shutil import which
+    sm = which('sendmail')
+    if sm is None:
+      raise Exception('No sendmail on the path')
+
+    # Execute sendmail
+    from subprocess import Popen, TimeoutExpired, PIPE, STDOUT
+    p = Popen([sm, '-t'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, text=True)
+    try:
+      message = f"""From: {args.sender}
+To: {','.join(args.address)}
+{message}
+"""
+      outs, _ = p.communicate(message, timeout=15)
+    except TimeoutExpired:
+      p.kill()
+      outs, _ = p.communicate()
+
+    if p.returncode:
+        print(f'ERROR: exit code={p.returncode}; {outs}')
 
 # Standard boilerplate to call the main() function to begin
 # the program.
