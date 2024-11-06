@@ -59,8 +59,8 @@ class MetaData:
 
         for map_ann in map_annotations:
             map_data = dict(map_ann.getValue())
-            if "DAPI" in map_data or "Hoechst" in map_data:
-                print("Found map annotation with 'DAPI' or 'Hoechst'")
+            if any(keyword in map_data for keyword in ["DAPI", "Hoechst", "DNA"]):
+                print("Found map annotation with 'DAPI' or 'Hoechst' or 'DNA'")
                 key_value_data = map_ann.getValue()
                 return self._get_channel_data(key_value_data), None
 
@@ -98,8 +98,9 @@ class MetaData:
         """Process and clean channel data."""
         channels = dict(key_value_data)
         cleaned_channels = {key.strip(): value for key, value in channels.items()}
-        if "Hoechst" in cleaned_channels:
-            cleaned_channels["DAPI"] = cleaned_channels.pop("Hoechst")
+        for key in ["Hoechst", "DNA"]:
+            if key in cleaned_channels:
+                cleaned_channels["DAPI"] = cleaned_channels.pop(key)
         
         # Convert channel numbers to integer type
         cleaned_channels = {key: int(value) for key, value in cleaned_channels.items()}
