@@ -23,7 +23,7 @@ logger = logging.getLogger("omero-screen")
 # Functions to loop through well object, assemble data for images and ave quality control data
 
 
-def well_loop(conn, well, metadata, project_data, flatfield_dict):
+def well_loop(conn, well, metadata, project_data, flatfield_dict, args):
     print(f"\nSegmenting and Analysing Images\n")
     df_well = pd.DataFrame()
     df_well_quality = pd.DataFrame()
@@ -32,6 +32,15 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict):
         omero_img = well.getImage(number)
         image = Image(conn, well, omero_img, metadata, project_data, flatfield_dict)
         image_data = ImageProperties(well, image, metadata)
+        # This is from the kemal branch
+        # if "Tub" in metadata.channels.keys():
+        #     image = Image(conn, well, omero_img, metadata, project_data, flatfield_dict)
+        #     image_data = ImageProperties(well, image, metadata, args=args)
+        # else:
+        #     image = NucImage(
+        #         conn, well, omero_img, metadata, project_data, flatfield_dict
+        #     )
+        #     image_data = NucImageProperties(well, image, metadata)
         df_image = image_data.image_df
         df_image_quality = image_data.quality_df
         df_well = pd.concat([df_well, df_image])
@@ -39,7 +48,7 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict):
     return df_well, df_well_quality
 
 
-def plate_loop(plate_id: int, conn: BlitzGateway):
+def plate_loop(plate_id: int, conn: BlitzGateway, args):
     """
     Main loop to process a plate.
     :param plate_id: ID of the plate
@@ -62,7 +71,7 @@ def plate_loop(plate_id: int, conn: BlitzGateway):
     print_device_info()
 
     df_final, df_quality_control = process_wells(
-        metadata, project_data, flatfield_dict, conn
+        metadata, project_data, flatfield_dict, conn, args=args
     )
     logger.debug(f"Final data sample: {df_final.head()}")
     logger.debug(f"Final data columns: {df_final.columns}")
@@ -112,6 +121,7 @@ def process_wells(
     project_data: ProjectSetup,
     flatfield_dict: dict,
     conn: BlitzGateway,
+    args
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Process the wells of the plate.
@@ -134,7 +144,7 @@ def process_wells(
             message = f"{metadata.separator}\nAnalysing well row:{well.row}/col:{well.column} - {count + 1} of {metadata.plate_length}."
             print(message)
             well_data, well_quality = well_loop(
-                conn, well, metadata, project_data, flatfield_dict
+                conn, well, metadata, project_data, flatfield_dict, args=args
             )
             df_final = pd.concat([df_final, well_data])
             df_quality_control = pd.concat([df_quality_control, well_quality])

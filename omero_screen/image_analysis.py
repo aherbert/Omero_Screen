@@ -227,7 +227,7 @@ class ImageProperties:
     and generates combined data frames.
     """
 
-    def __init__(self, well, image_obj, meta_data, featurelist=Defaults["FEATURELIST"]):
+    def __init__(self, well, image_obj, meta_data, featurelist=Defaults["FEATURELIST"], args=None):
         self._meta_data = meta_data
         self.plate_name = meta_data.plate_obj.getName()
         self._well = well
@@ -237,7 +237,13 @@ class ImageProperties:
         self._overlay = self._overlay_mask()
         self.image_df = self._combine_channels(featurelist)
         self.quality_df = self._concat_quality_df()
-        self._classify_image(image_obj.img_dict, self.image_df, image_obj.c_mask)
+
+        print("Args : ",args)
+
+        if args.inference:
+            model_name = args.inference
+            print(f"Running inference with model: {model_name}")
+            self._classify_image(image_obj.img_dict, self.image_df, image_obj.c_mask, model_name)
 
     def _overlay_mask(self) -> pd.DataFrame:
         """Links nuclear IDs with cell IDs"""
@@ -434,12 +440,9 @@ class ImageProperties:
     
     @omero_connect
     def _load_model_from_omero(self, project_name, dataset_name, model_filename, conn=None):
-
-        # Check if the model already exists locally
         file_path = f"./{model_filename}"
         if os.path.exists(file_path):
-            print(f"Model file '{model_filename}' already exists locally.")
-            # Mevcut dosyayı yükleyin
+            logger.info(f"Model file '{model_filename}' already exists locally.")
             model = ROIBasedDenseNetModel(num_classes=7)
             model.load_state_dict(torch.load(file_path, weights_only=True))
             model.eval()
@@ -448,34 +451,30 @@ class ImageProperties:
         # Find project
         project = conn.getObject("Project", attributes={"name": project_name})
         if project is None:
-            raise ValueError(f"Project '{project_name}' not found in OMERO.")
-        
+            logger.warning(f"Project '{project_name}' not found in OMERO.")
+            return None
+
         # Find dataset
-        dataset = None
-        for ds in project.listChildren():
-            if ds.getName() == dataset_name:
-                dataset = ds
-                break
+        dataset = next((ds for ds in project.listChildren() if ds.getName() == dataset_name), None)
         if dataset is None:
-            raise ValueError(f"Dataset '{dataset_name}' not found in project '{project_name}'.")
+            logger.warning(f"Dataset '{dataset_name}' not found in project '{project_name}'.")
+            return None
 
         for attachment in dataset.listAnnotations():
             if isinstance(attachment, omero.gateway.FileAnnotationWrapper):
                 if attachment.getFileName() == model_filename:
-                    # Download the model
                     file_path = f"./{model_filename}"
                     with open(file_path, "wb") as f:
                         for chunk in attachment.getFileInChunks():
                             f.write(chunk)
-                    print(f"Downloaded model file to {file_path}")
-
-                    # Load the downloaded model
+                    logger.info(f"Downloaded model file to {file_path}")
                     model = ROIBasedDenseNetModel(num_classes=7)
                     model.load_state_dict(torch.load(file_path, weights_only=True))
                     model.eval()
                     return model
 
-        raise FileNotFoundError(f"File '{model_filename}' not found in dataset '{dataset_name}' under project '{project_name}'.")
+        logger.warning(f"File '{model_filename}' not found in dataset '{dataset_name}' under project '{project_name}'.")
+        return None
     
     def _apply_mask_to_image(self, rgb_image, mask, x0, y0, x1, y1):
         """
@@ -490,7 +489,11 @@ class ImageProperties:
 
         return masked_image
 
-    def _classify_image(self, image_data, image_df, mask):
+    def _classify_image(self, image_data, image_df, mask, model_name):
+
+        logger.info("Starting classification process...")
+
+        print("Image Data : ", image_data.keys())
 
         # Extract the DAPI and TuB channels from image_data
         dapi_image = image_data['DAPI']
@@ -501,7 +504,12 @@ class ImageProperties:
 
         device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
-        model = self._load_model_from_omero("CNN_Models", "ROI_Based_DenseNet", "roi_based_densenet_model.pth")
+        model = self._load_model_from_omero("CNN_Models", model_name, model_name+".pth")
+        if model is None:
+            logger.warning(f"Model '{model_name}' could not be loaded. Skipping classification.")
+            return  # Model yüklenemediği için sınıflandırma yapılmaz
+
+        logger.info(f"Model '{model_name}' loaded successfully. Proceeding with classification.")
         model = model.to(device)
         model.eval()
 
