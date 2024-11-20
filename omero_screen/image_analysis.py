@@ -26,6 +26,7 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
+import json
 
 
 logger = logging.getLogger("omero-screen")
@@ -238,11 +239,8 @@ class ImageProperties:
         self.image_df = self._combine_channels(featurelist)
         self.quality_df = self._concat_quality_df()
 
-        print("Args : ",args)
-
         if args.inference:
             model_name = args.inference
-            print(f"Running inference with model: {model_name}")
             self._classify_image(image_obj.img_dict, self.image_df, image_obj.c_mask, model_name)
 
     def _overlay_mask(self) -> pd.DataFrame:
@@ -441,40 +439,80 @@ class ImageProperties:
     @omero_connect
     def _load_model_from_omero(self, project_name, dataset_name, model_filename, conn=None):
         file_path = f"./{model_filename}"
+        metadata_path = f"./{model_filename}_metadata.json"
+
+        # If the model file exists locally
         if os.path.exists(file_path):
             logger.info(f"Model file '{model_filename}' already exists locally.")
+            
+            # Check and download Key-Value Pairs
+            self._download_key_value_pairs(dataset_name, metadata_path, conn)
+
+            # Load the model
             model = ROIBasedDenseNetModel(num_classes=7)
             model.load_state_dict(torch.load(file_path, weights_only=True))
             model.eval()
-            return model
+            return model, metadata_path if os.path.exists(metadata_path) else None
 
-        # Find project
+        # Find the project in OMERO
         project = conn.getObject("Project", attributes={"name": project_name})
         if project is None:
             logger.warning(f"Project '{project_name}' not found in OMERO.")
-            return None
+            return None, None
 
-        # Find dataset
+        # Find the dataset in OMERO
         dataset = next((ds for ds in project.listChildren() if ds.getName() == dataset_name), None)
         if dataset is None:
             logger.warning(f"Dataset '{dataset_name}' not found in project '{project_name}'.")
-            return None
+            return None, None
 
+        # Check annotations in the dataset
+        model_found = False
         for attachment in dataset.listAnnotations():
             if isinstance(attachment, omero.gateway.FileAnnotationWrapper):
+                # Download the model file
                 if attachment.getFileName() == model_filename:
-                    file_path = f"./{model_filename}"
                     with open(file_path, "wb") as f:
                         for chunk in attachment.getFileInChunks():
                             f.write(chunk)
                     logger.info(f"Downloaded model file to {file_path}")
-                    model = ROIBasedDenseNetModel(num_classes=7)
-                    model.load_state_dict(torch.load(file_path, weights_only=True))
-                    model.eval()
-                    return model
+                    model_found = True
 
+        # If the model file was downloaded, download the Key-Value Pairs
+        if model_found:
+            self._download_key_value_pairs(dataset_name, metadata_path, conn)
+            model = ROIBasedDenseNetModel(num_classes=7)
+            model.load_state_dict(torch.load(file_path, weights_only=True))
+            model.eval()
+            return model, metadata_path if os.path.exists(metadata_path) else None
+
+        # If the model was not found
         logger.warning(f"File '{model_filename}' not found in dataset '{dataset_name}' under project '{project_name}'.")
-        return None
+        return None, None
+
+
+    def _download_key_value_pairs(self, dataset_name, metadata_path, conn):
+        """Download Key-Value Pairs and save them as a JSON file."""
+        dataset = conn.getObject("Dataset", attributes={"name": dataset_name})
+        if dataset is None:
+            logger.warning(f"Dataset '{dataset_name}' not found.")
+            return
+
+        key_value_pairs = {}
+        for annotation in dataset.listAnnotations():
+            if isinstance(annotation, omero.gateway.MapAnnotationWrapper):
+                # Retrieve the Key-Value Pairs content
+                key_value_pairs.update(dict(annotation.getValue()))
+
+        if key_value_pairs:
+            # Save to a JSON file
+            with open(metadata_path, "w") as f:
+                json.dump(key_value_pairs, f, indent=4)
+            logger.info(f"Key-Value Pairs metadata saved to {metadata_path}.")
+        else:
+            logger.warning(f"No Key-Value Pairs found in dataset '{dataset_name}'.")
+
+
     
     def _apply_mask_to_image(self, rgb_image, mask, x0, y0, x1, y1):
         """
@@ -493,21 +531,37 @@ class ImageProperties:
 
         logger.info("Starting classification process...")
 
-        print("Image Data : ", image_data.keys())
-
-        # Extract the DAPI and TuB channels from image_data
-        dapi_image = image_data['DAPI']
-        tub_image = image_data['Tub']
-        edu_image = image_data['EdU']
-
         predicted_classes = []
-
         device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        model, metadata_path = self._load_model_from_omero("CNN_Models", model_name, model_name+".pth")
 
-        model = self._load_model_from_omero("CNN_Models", model_name, model_name+".pth")
         if model is None:
             logger.warning(f"Model '{model_name}' could not be loaded. Skipping classification.")
-            return  # Model yüklenemediği için sınıflandırma yapılmaz
+            return 
+
+        logger.info(f"Model '{model_name}' loaded successfully. Proceeding with classification.")
+
+        if metadata_path:
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+
+            active_channels = [key for key, value in metadata.items() if value == "1"]
+            logger.info(f"Active channels from metadata: {active_channels}")
+        else:
+            logger.warning("Metadata file not found. Skipping classification.")
+            return
+        
+        missing_channels = [channel for channel in active_channels if channel not in image_data]
+        if missing_channels:
+            logger.warning(f"The following active channels are missing in image data: {missing_channels}. Skipping classification.")
+            return
+
+        selected_channels = {channel: image_data[channel] for channel in active_channels}
+        logger.info(f"Selected images for classification: {selected_channels.keys()}")
+
+        if model is None:
+            logger.warning(f"Model '{model_name}' could not be loaded. Skipping classification.")
+            return
 
         logger.info(f"Model '{model_name}' loaded successfully. Proceeding with classification.")
         model = model.to(device)
@@ -527,46 +581,36 @@ class ImageProperties:
             # Ensure crop coordinates are within image bounds
             x0 = max(0, x0)
             y0 = max(0, y0)
-            x1 = min(dapi_image.shape[1], x1)  # width limit
-            y1 = min(dapi_image.shape[0], y1)  # height limit
+            x1 = min(selected_channels[active_channels[0]].shape[1], x1)  # width limit
+            y1 = min(selected_channels[active_channels[0]].shape[0], y1)  # height limit
 
-            # Crop DAPI and TuB images
-            cropped_dapi = self._crop_image(dapi_image, x0, y0, x1, y1)
-            cropped_tub = self._crop_image(tub_image, x0, y0, x1, y1)
-            cropped_edu = self._crop_image(edu_image, x0, y0, x1, y1)
+            # Crop images
+            cropped_images = {
+                channel: self._crop_image(selected_channels[channel], x0, y0, x1, y1)
+                for channel in selected_channels
+            }
 
             # Normalize the cropped images for better visualization
-            dapi_normalized = (cropped_dapi - cropped_dapi.min()) / (cropped_dapi.max() - cropped_dapi.min())
-            tub_normalized = (cropped_tub - cropped_tub.min()) / (cropped_tub.max() - cropped_tub.min())
-            edu_normalized = (cropped_edu - cropped_edu.min()) / (cropped_edu.max() - cropped_edu.min())
+            normalized_images = {
+                channel: (img - img.min()) / (img.max() - img.min())
+                for channel, img in cropped_images.items()
+            }
 
             # Create an RGB image with the same size as the cropped images
-            rgb_image = np.zeros((dapi_normalized.shape[0], dapi_normalized.shape[1], 3))
-            
-            # Assign DAPI to red channel and TuB to green channel
-            rgb_image[:, :, 0] = dapi_normalized  # Red channel for DAPI
-            rgb_image[:, :, 1] = tub_normalized   # Green channel for TuB
-            rgb_image[:, :, 2] = edu_normalized
+            rgb_image = np.zeros((normalized_images[active_channels[0]].shape[0], normalized_images[active_channels[0]].shape[1], 3))
+
+            for i in range(len(selected_channels.keys())):
+                rgb_image[:, :, i] = normalized_images[active_channels[i]]
 
             cell_image = self._apply_mask_to_image(rgb_image, mask, x0, y0, x1, y1)
-
             channels = np.stack([cell_image[:, : , 0], cell_image[:, : , 1]], axis=0)
-
             image_tensor = torch.tensor(channels, dtype=torch.float32)
-
             image_tensor = image_tensor.unsqueeze(0)  # shape: (1, 2, height, width)
-
             image_tensor = image_tensor.to(device)
-
-            # Load the model
-            # model = ROIBasedDenseNetModel(num_classes=7)
-            # model.load_state_dict(torch.load("roi_based_densenet_model.pth", weights_only=True))
 
             with torch.no_grad():
                 outputs = model(image_tensor)
                 _, predicted = torch.max(outputs, 1)
-
-            # print(f"Predicted class: {predicted.item()}")
 
             class_names = ['anaphase', 'interphase', 'metaphase', 'multipolar', 'prometaphase', 'prophase', 'telophase']
 
@@ -619,5 +663,11 @@ if __name__ == "__main__":
         print(df_image.head())
         print(df_image.columns)
         df_image.to_csv("~/Desktop/image_data.csv")
+        # This is from the kemal branch
+        # image_data = ImageProperties(well, image, meta_data, exp_paths)
+        # image.segmentation_figure()
+        # df_final = image_data.image_df
+        # df_final = pd.concat([df_final.loc[:, 'experiment':], df_final.loc[:, :'experiment']], axis=1).iloc[:, :-1]
+        # print(df_final)
 
     feature_extraction_test()
