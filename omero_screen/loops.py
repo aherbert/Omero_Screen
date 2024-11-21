@@ -18,9 +18,14 @@ import pandas as pd
 import pathlib
 from typing import Tuple
 import logging
+import matplotlib.pyplot as plt
 
 logger = logging.getLogger("omero-screen")
 # Functions to loop through well object, assemble data for images and ave quality control data
+
+# Initialize the gallery dictionary
+gallery_dict = {class_name: [] for class_name in ['anaphase', 'interphase', 'metaphase', 
+                                                    'multipolar', 'prometaphase', 'prophase', 'telophase']}
 
 
 def well_loop(conn, well, metadata, project_data, flatfield_dict, args):
@@ -45,6 +50,12 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict, args):
         df_image_quality = image_data.quality_df
         df_well = pd.concat([df_well, df_image])
         df_well_quality = pd.concat([df_well_quality, df_image_quality])
+
+        # Collect gallery images for each class
+        for class_name, images in image_data.gallery_dict.items():
+            if images:
+                gallery_dict[class_name].extend(images[:100 - len(gallery_dict[class_name])])
+
     return df_well, df_well_quality
 
 
@@ -148,6 +159,31 @@ def process_wells(
             )
             df_final = pd.concat([df_final, well_data])
             df_quality_control = pd.concat([df_quality_control, well_quality])
+
+    # Create and save galleries after the loop
+    logger.info("Generating and saving gallery images...")
+    for class_name, images in gallery_dict.items():
+        if images:
+            # Limit to max 100 images for gallery
+            num_images = min(len(images), 100)
+            grid_size = 10  # 10x10 grid
+
+            fig, axs = plt.subplots(grid_size, grid_size, figsize=(20, 20), facecolor="white")
+            axs = axs.reshape(grid_size, grid_size)  # Ensure axs is a 2D grid
+
+            for idx, ax in enumerate(axs.flat):
+                if idx < num_images:
+                    ax.imshow(images[idx])
+                    ax.axis('off')
+                    ax.set_title(f"{class_name} {idx + 1}", fontsize=8)
+                else:
+                    ax.axis('off')  # Hide unused axes
+
+            plt.tight_layout()
+            output_path = f"inference_galleries/{class_name}_gallery_10x10.png"
+            plt.savefig(output_path, bbox_inches="tight", facecolor="white")
+            logger.info(f"Gallery saved for class '{class_name}' at {output_path}")
+            plt.close()
 
     return df_final, df_quality_control
 

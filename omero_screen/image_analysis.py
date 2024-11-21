@@ -238,6 +238,7 @@ class ImageProperties:
         self._overlay = self._overlay_mask()
         self.image_df = self._combine_channels(featurelist)
         self.quality_df = self._concat_quality_df()
+        self.gallery_dict = {class_name: [] for class_name in ['anaphase', 'interphase', 'metaphase', 'multipolar', 'prometaphase', 'prophase', 'telophase']}
 
         if args.inference:
             model_name = args.inference
@@ -613,8 +614,11 @@ class ImageProperties:
                 _, predicted = torch.max(outputs, 1)
 
             class_names = ['anaphase', 'interphase', 'metaphase', 'multipolar', 'prometaphase', 'prophase', 'telophase']
+            predicted_class = class_names[int(predicted.item())]
+            predicted_classes.append(predicted_class)
 
-            predicted_classes.append(class_names[int(predicted.item())])
+            # Add the image to the gallery dictionary
+            self.gallery_dict[predicted_class].append(rgb_image)
             
         self.image_df["Class"] = predicted_classes
 
