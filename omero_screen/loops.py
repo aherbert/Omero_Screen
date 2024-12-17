@@ -1,5 +1,5 @@
-import omero_screen
 import os
+from omero_screen.image_classifier import ImageClassifier
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 from omero_screen import Defaults
 from omero_screen.metadata import MetaData, ProjectSetup
@@ -19,16 +19,16 @@ import pathlib
 from typing import Tuple
 import logging
 import matplotlib.pyplot as plt
+import random
 
 logger = logging.getLogger("omero-screen")
 # Functions to loop through well object, assemble data for images and ave quality control data
 
 # Initialize the gallery dictionary
-gallery_dict = {class_name: [] for class_name in ['anaphase', 'interphase', 'metaphase', 
-                                                    'multipolar', 'prometaphase', 'prophase', 'telophase']}
+gallery_dict = {}
 
 
-def well_loop(conn, well, metadata, project_data, flatfield_dict, args):
+def well_loop(conn, well, metadata, project_data, flatfield_dict, args, image_classifier):
     print(f"\nSegmenting and Analysing Images\n")
     df_well = pd.DataFrame()
     df_well_quality = pd.DataFrame()
@@ -40,7 +40,7 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict, args):
         # This is from the kemal branch
         # if "Tub" in metadata.channels.keys():
         #     image = Image(conn, well, omero_img, metadata, project_data, flatfield_dict)
-        #     image_data = ImageProperties(well, image, metadata, args=args)
+        #     image_data = ImageProperties(well, image, metadata, image_classifier, args=args)
         # else:
         #     image = NucImage(
         #         conn, well, omero_img, metadata, project_data, flatfield_dict
@@ -50,11 +50,6 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict, args):
         df_image_quality = image_data.quality_df
         df_well = pd.concat([df_well, df_image])
         df_well_quality = pd.concat([df_well_quality, df_image_quality])
-
-        # Collect gallery images for each class
-        for class_name, images in image_data.gallery_dict.items():
-            if images:
-                gallery_dict[class_name].extend(images[:100 - len(gallery_dict[class_name])])
 
     return df_well, df_well_quality
 
@@ -145,6 +140,8 @@ def process_wells(
     """
     df_final = pd.DataFrame()
     df_quality_control = pd.DataFrame()
+    image_classifier = ImageClassifier(conn, args.inference)
+    gallery_dict = {class_name: [] for class_name in image_classifier.gallery_dict.keys()}
     for count, well in enumerate(list(metadata.plate_obj.listChildren())):
         ann = well.getAnnotation(Defaults["NS"])
         try:
@@ -154,30 +151,44 @@ def process_wells(
         if cell_line != "Empty":
             message = f"{metadata.separator}\nAnalysing well row:{well.row}/col:{well.column} - {count + 1} of {metadata.plate_length}."
             print(message)
+            print("Gallery dict keys :",gallery_dict.keys())
             well_data, well_quality = well_loop(
-                conn, well, metadata, project_data, flatfield_dict, args=args
+                conn, well, metadata, project_data, flatfield_dict, args=args, image_classifier=image_classifier
             )
             df_final = pd.concat([df_final, well_data])
             df_quality_control = pd.concat([df_quality_control, well_quality])
+        
+        # Collect gallery images for each class
+        for class_name, images in image_classifier.gallery_dict.items():
+            if images:
+                gallery_dict[class_name].extend(images)
+
+        image_classifier.gallery_dict = {class_name: [] for class_name in image_classifier.class_options}
 
     # Create and save galleries after the loop
-    logger.info("Generating and saving gallery images...")
+    logger.info(f"Generating and saving gallery images")
     for class_name, images in gallery_dict.items():
         if images:
             # Limit to max 100 images for gallery
             num_images = min(len(images), 100)
             grid_size = 10  # 10x10 grid
 
+            # Randomly select images
+            selected_images = random.sample(images, num_images) if len(images) > num_images else images
+
             fig, axs = plt.subplots(grid_size, grid_size, figsize=(20, 20), facecolor="white")
             axs = axs.reshape(grid_size, grid_size)  # Ensure axs is a 2D grid
 
             for idx, ax in enumerate(axs.flat):
-                if idx < num_images:
-                    ax.imshow(images[idx])
+                if idx < len(selected_images):
+                    if selected_images[idx].shape[-1] == 2:  # If there is 2 channels
+                        ax.imshow(selected_images[idx][:, :, 0], cmap='gray')
+                        ax.set_title(f"{class_name} {idx + 1} (Channel 1)", fontsize=8)
+                    else:
+                        ax.imshow(selected_images[idx])
                     ax.axis('off')
-                    ax.set_title(f"{class_name} {idx + 1}", fontsize=8)
                 else:
-                    ax.axis('off')  # Hide unused axes
+                    ax.axis('off')
 
             plt.tight_layout()
             output_path = f"inference_galleries/{class_name}_gallery_10x10.png"

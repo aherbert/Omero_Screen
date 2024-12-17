@@ -226,4 +226,6 @@ scratch*
 secrets
 
 
-
+/omero_screen/roi_based_densenet0-1.pth
+/omero_screen/metadata.json
+/omero_screen/9December_Densenet0-1.pth
