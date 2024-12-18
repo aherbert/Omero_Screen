@@ -220,7 +220,7 @@ class ImageProperties:
     and generates combined data frames.
     """
 
-    def __init__(self, well, image_obj, meta_data, image_classifier, featurelist=Defaults["FEATURELIST"], args=None):
+    def __init__(self, well, image_obj, meta_data, image_classifier, featurelist=Defaults["FEATURELIST"]):
         self._meta_data = meta_data
         self.plate_name = meta_data.plate_obj.getName()
         self._well = well

@@ -9,16 +9,11 @@ import argparse
 
 
 @omero_connect
-def main(plate_id, options=None, conn=None):
+def main(plate_id, inference_model, options=None, conn=None):
     if options:
         Defaults.update(options)
 
-    parser = argparse.ArgumentParser(description="Image analysis with optional inference.")
-    parser.add_argument("--inference", type=str, metavar="MODEL", 
-                        help="Run inference on the dataset using a pre-trained model. Specify the model filename.")
-    args = parser.parse_args()
-
-    plate_loop(plate_id, conn, args)
+    plate_loop(plate_id, conn, inference_model)
 
 
 if __name__ == "__main__":

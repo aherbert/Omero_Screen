@@ -170,6 +170,8 @@ def parse_args():
   group = parser.add_argument_group('Omero Screen overrides')
   group.add_argument('-d', '--debug', dest='debug', action='store_true',
     help='Debug mode')
+  group.add_argument("--inference", type=str, metavar="MODEL", 
+    help="Run inference on the dataset using a pre-trained model. Specify the model filename.")
 
   return parser.parse_args()
 

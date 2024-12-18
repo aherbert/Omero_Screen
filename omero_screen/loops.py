@@ -28,7 +28,7 @@ logger = logging.getLogger("omero-screen")
 gallery_dict = {}
 
 
-def well_loop(conn, well, metadata, project_data, flatfield_dict, args, image_classifier):
+def well_loop(conn, well, metadata, project_data, flatfield_dict, inference_model, image_classifier):
     print(f"\nSegmenting and Analysing Images\n")
     df_well = pd.DataFrame()
     df_well_quality = pd.DataFrame()
@@ -40,7 +40,7 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict, args, image_cl
         # This is from the kemal branch
         # if "Tub" in metadata.channels.keys():
         #     image = Image(conn, well, omero_img, metadata, project_data, flatfield_dict)
-        #     image_data = ImageProperties(well, image, metadata, image_classifier, args=args)
+        #     image_data = ImageProperties(well, image, metadata, image_classifier)
         # else:
         #     image = NucImage(
         #         conn, well, omero_img, metadata, project_data, flatfield_dict
@@ -54,7 +54,7 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict, args, image_cl
     return df_well, df_well_quality
 
 
-def plate_loop(plate_id: int, conn: BlitzGateway, args):
+def plate_loop(plate_id: int, conn: BlitzGateway, inference_model):
     """
     Main loop to process a plate.
     :param plate_id: ID of the plate
@@ -77,7 +77,7 @@ def plate_loop(plate_id: int, conn: BlitzGateway, args):
     print_device_info()
 
     df_final, df_quality_control = process_wells(
-        metadata, project_data, flatfield_dict, conn, args=args
+        metadata, project_data, flatfield_dict, conn, inference_model=inference_model
     )
     logger.debug(f"Final data sample: {df_final.head()}")
     logger.debug(f"Final data columns: {df_final.columns}")
@@ -127,7 +127,7 @@ def process_wells(
     project_data: ProjectSetup,
     flatfield_dict: dict,
     conn: BlitzGateway,
-    args
+    inference_model
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Process the wells of the plate.
@@ -140,7 +140,7 @@ def process_wells(
     """
     df_final = pd.DataFrame()
     df_quality_control = pd.DataFrame()
-    image_classifier = ImageClassifier(conn, args.inference)
+    image_classifier = ImageClassifier(conn, inference_model)
     gallery_dict = {class_name: [] for class_name in image_classifier.gallery_dict.keys()}
     for count, well in enumerate(list(metadata.plate_obj.listChildren())):
         ann = well.getAnnotation(Defaults["NS"])
@@ -153,7 +153,7 @@ def process_wells(
             print(message)
             print("Gallery dict keys :",gallery_dict.keys())
             well_data, well_quality = well_loop(
-                conn, well, metadata, project_data, flatfield_dict, args=args, image_classifier=image_classifier
+                conn, well, metadata, project_data, flatfield_dict, inference_model=inference_model, image_classifier=image_classifier
             )
             df_final = pd.concat([df_final, well_data])
             df_quality_control = pd.concat([df_quality_control, well_quality])
