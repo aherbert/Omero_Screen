@@ -1,0 +1,19 @@
+name: omero-screen
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10.*
+  - pip
+  - pip:
+    - cellpose
+    - imagecodecs
+    - pyqtgraph
+    - omero-py
+    - scikit-image
+    - matplotlib
+    - tensorflow
+    - stardist
+    - seaborn
+    - plotnine
+    - jupyter
+    - ezomero
