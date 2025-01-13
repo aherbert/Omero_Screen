@@ -36,7 +36,10 @@ class ImageClassifier:
         """
         self.image_data = None
         self.crop_size = 100
-        self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        else:
+            self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
         self.cropped_images = []
         self.processed_images = []  # Store processed image data for all images
         self.crop_coords_list = []  # Store crop coordinates for all images
