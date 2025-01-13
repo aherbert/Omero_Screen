@@ -120,9 +120,6 @@ def print_device_info() -> None:
         print("Using Cellpose with CPU.")
 
 
-from typing import Tuple
-
-
 def process_wells(
     metadata: MetaData,
     project_data: ProjectSetup,
@@ -192,7 +189,7 @@ def process_wells(
                     ax.axis('off')
 
             plt.tight_layout()
-            output_path = f"inference_galleries/{class_name}_gallery_10x10.png"
+            output_path = pathlib.Path.home() / "{class_name}_gallery_10x10.png"
             plt.savefig(output_path, bbox_inches="tight", facecolor="white")
             logger.info(f"Gallery saved for class '{class_name}' at {output_path}")
             plt.close()
