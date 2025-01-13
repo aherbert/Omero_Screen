@@ -206,8 +206,9 @@ class ImageClassifier:
         for i in tqdm(range(len(images["centroid-0"]))):
 
             # Center the crop around the centroid coordinates with a 100x100 area
-            max_length_x = self.selected_channels[self.active_channels[0]].shape[1]
-            max_length_y = self.selected_channels[self.active_channels[0]].shape[0]
+            # Assume YX are the last dimensions
+            max_length_x = self.selected_channels[self.active_channels[0]].shape[-1]
+            max_length_y = self.selected_channels[self.active_channels[0]].shape[-2]
 
             centroid_x = images["centroid-1_x"].iloc[i]
             centroid_y = images["centroid-0_y"].iloc[i]
@@ -264,6 +265,8 @@ class ImageClassifier:
             self.gallery_dict[predicted_class].append(processed_image)
             predicted_classes.append(predicted_class)
 
+        # This gives an warning:
+        # A value is trying to be set on a copy of a slice from a DataFrame.
         images["Class"] = predicted_classes
 
         original_images = original_images.merge(
@@ -322,15 +325,18 @@ class ImageClassifier:
         if y1 < y0:
             y0, y1 = y1, y0  # Swap values if y1 is less than y0
 
-        # Convert image to PIL format if it's a numpy array
-        if isinstance(image, np.ndarray):
-            image = PILImage.fromarray(image)
+        # Crop with numpy to return a 2D image with YX as last dimensions
+        return image.squeeze()[y0:y1, x0:x1]
+
+        # # Convert image to PIL format if it's a numpy array
+        # if isinstance(image, np.ndarray):
+        #     image = PILImage.fromarray(image)
         
-        # Crop the image using the corrected coordinates
-        cropped_image = image.crop((x0, y0, x1, y1))
+        # # Crop the image using the corrected coordinates
+        # cropped_image = image.crop((x0, y0, x1, y1))
         
-        # Convert back to numpy array for further processing
-        return np.array(cropped_image)
+        # # Convert back to numpy array for further processing
+        # return np.array(cropped_image)
     
     def extract_roi_multichannel(self, image, mask):
         """
@@ -490,7 +496,3 @@ class ImageClassifier:
         buf.close()
 
         return processed_image
-
-
-    
-    
