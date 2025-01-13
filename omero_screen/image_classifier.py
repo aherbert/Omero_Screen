@@ -13,6 +13,7 @@ import cv2
 from matplotlib.colors import Normalize
 from io import BytesIO
 import logging
+import pathlib
 
 from omero_screen.models import ROIBasedDenseNetModel
 
@@ -48,7 +49,7 @@ class ImageClassifier:
     def load_model_from_omero(self, project_name, dataset_name, 
                                model_filename, conn=None):
         
-        file_path = f"./{model_filename}"
+        file_path = pathlib.Path.home() / model_filename
 
         # If the model file exists locally
         if os.path.exists(file_path):
@@ -92,7 +93,7 @@ class ImageClassifier:
                     with open(file_path, "wb") as f:
                         for chunk in attachment.getFileInChunks():
                             f.write(chunk)
-                    logger.info(f"Downloåçaded model file to {file_path}")
+                    logger.info(f"Downloaded model file to {file_path}")
                     model_found = True
 
         # If the model file was downloaded, download the Key-Value Pairs
@@ -131,7 +132,7 @@ class ImageClassifier:
             list: A list of active channels if found, otherwise an empty list.
         """
         metadata_file_name = "metadata.json"
-        metadata_local_path = f"./{metadata_file_name}"
+        metadata_local_path = pathlib.Path.home() / metadata_file_name
 
         # Find the dataset in OMERO
         dataset = conn.getObject("Dataset", attributes={"name": dataset_name})
