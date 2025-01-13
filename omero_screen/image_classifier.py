@@ -70,7 +70,7 @@ class ImageClassifier:
 
             # Load the model
             model = ROIBasedDenseNetModel(num_classes=len(class_options), num_channels=len(active_channels))
-            model.load_state_dict(torch.load(file_path, weights_only=True))
+            model.load_state_dict(torch.load(file_path, weights_only=True, map_location=torch.device('cpu')))
             model = model.to(self.device)  # Move model to the device
             model.eval()
             return model, active_channels, class_options
@@ -113,7 +113,7 @@ class ImageClassifier:
 
             # Load the model
             model = ROIBasedDenseNetModel(num_classes=len(class_options), num_channels=len(active_channels))
-            model.load_state_dict(torch.load(file_path, weights_only=True))
+            model.load_state_dict(torch.load(file_path, weights_only=True, map_location=torch.device('cpu')))
             model = model.to(self.device)  # Move model to the device
             model.eval()
             return model, active_channels, class_options
