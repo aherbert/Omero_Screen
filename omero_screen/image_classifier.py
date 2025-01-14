@@ -144,6 +144,7 @@ class ImageClassifier:
                 if "user_data" in metadata and "channels" in metadata["user_data"]:
                     active_channels = metadata["user_data"]["channels"]
                     class_options = metadata["class_options"]
+                    self.crop_size = int(metadata["user_data"]["crop_size"])
                     class_options.remove("unassigned")
                     logger.info(f"Active channels extracted: {active_channels}")
                     logger.info(f"Class options: {class_options}")
@@ -187,6 +188,9 @@ class ImageClassifier:
         images = self.remove_duplicate_cyto_ids(images)
         print("Images length after removing duplicates : ", len(images))
 
+        target_size = (100, 100)  # Target size (height, width)
+        half_crop = self.crop_size // 2
+
         for i in tqdm(range(len(images["centroid-0"]))):
 
             # Center the crop around the centroid coordinates with a 100x100 area
@@ -197,40 +201,40 @@ class ImageClassifier:
             centroid_x = images["centroid-1_x"].iloc[i]
             centroid_y = images["centroid-0_y"].iloc[i]
 
-            x0 = int(max(0, centroid_x - self.crop_size // 2))
-            x1 = int(min(max_length_x, centroid_x + self.crop_size // 2))
-            y0 = int(max(0, centroid_y - self.crop_size // 2))
-            y1 = int(min(max_length_y, centroid_y + self.crop_size // 2))
+            x0 = int(max(0, centroid_x - half_crop))
+            x1 = int(min(max_length_x, centroid_x + half_crop))
+            y0 = int(max(0, centroid_y - half_crop))
+            y1 = int(min(max_length_y, centroid_y + half_crop))
 
             combined_channels = []
 
+            # Crop mask
+            cropped_mask = self.crop(mask, x0, y0, x1, y1).copy()
+            # Pass in the translated centroid allowing for the crop to clip
+            cx = min(half_crop, int(centroid_x))
+            cy = min(half_crop, int(centroid_y))
+            corrected_mask = self.erase_masks(cropped_mask, cx, cy)
+            # Convert mask to binary
+            binary_mask = (corrected_mask > 0).astype(np.uint8)
+
             for channel in self.selected_channels:
-
-                # Crop image and mask
+                # Crop image
                 cropped_image = self.crop(self.selected_channels[channel], x0, y0, x1, y1)
-
-                cropped_mask = self.crop(mask, x0, y0, x1, y1)
-
-                corrected_mask = self.erase_masks(cropped_mask)
-
-                masked_image = self.extract_roi_multichannel(cropped_image, corrected_mask)
-                
-                target_size = (100, 100)  # Target size (height, width)
-
-                padded_masked_image = self.add_padding(masked_image, target_size)
-
+                masked_image = self.extract_roi_multichannel(cropped_image, binary_mask)
                 # Add the masked image to the list for combining channels
-                combined_channels.append(padded_masked_image)
+                combined_channels.append(masked_image)
             
             if len(combined_channels) > 1:
                 # Combine channels if there is more than one channel
-                latest_image = np.stack(combined_channels, axis=0)
-                latest_image = np.squeeze(latest_image)
-                latest_image = np.transpose(latest_image, (1, 2, 0))
+                latest_image = np.dstack(combined_channels)
+                # latest_image = np.stack(combined_channels, axis=0)
+                # latest_image = np.squeeze(latest_image)
+                # latest_image = np.transpose(latest_image, (1, 2, 0))
             else:
-                latest_image = padded_masked_image
+                latest_image = masked_image
 
             max_val = np.max(latest_image)
+            latest_image = self.add_padding(latest_image, target_size)
 
             data_transform = transforms.Compose([
                 transforms.ToTensor(),
@@ -302,6 +306,7 @@ class ImageClassifier:
         
         Returns:
             Cropped image as a numpy array.
+            Note: This uses the same underlying data.
         """
         # Ensure coordinates are valid
         if x1 < x0:
@@ -310,7 +315,10 @@ class ImageClassifier:
             y0, y1 = y1, y0  # Swap values if y1 is less than y0
 
         # Crop with numpy to return a 2D image with YX as last dimensions
-        return image.squeeze()[y0:y1, x0:x1]
+        i = image.squeeze()
+        if i.ndim != 2:
+            raise Exception("Image classifier only supports 2D images: " + image.shape)
+        return i[y0:y1, x0:x1]
 
         # # Convert image to PIL format if it's a numpy array
         # if isinstance(image, np.ndarray):
@@ -322,21 +330,23 @@ class ImageClassifier:
         # # Convert back to numpy array for further processing
         # return np.array(cropped_image)
     
-    def extract_roi_multichannel(self, image, mask):
+    def extract_roi_multichannel(self, image, binary_mask):
         """
         Extracts the ROI (Region of Interest) from a multi-channel image using the mask.
         Args:
             image (numpy array): Multi-channel input image (height, width, channels).
-            mask (numpy array): Mask image (should have the same height and width).
+            binary_mask (numpy array): Mask image (should have the same height and width).
         Returns:
             numpy array: Cropped ROI with masked regions.
         """
 
+        coords = np.argwhere(binary_mask > 0)
+        if len(coords) == 0:  # Ensure there are non-zero mask regions
+            # Return full image if no ROI is found
+            return image
+
         if image.ndim == 2:  # Single channel (height, width)
             image = np.expand_dims(image, axis=-1) 
-
-        # Convert mask to binary
-        binary_mask = (mask > 0).astype(np.uint8)
 
         # Apply the mask to all channels
         roi = np.zeros_like(image)
@@ -344,13 +354,9 @@ class ImageClassifier:
             roi[..., channel] = image[..., channel] * binary_mask
 
         # Crop the masked region
-        coords = np.argwhere(binary_mask > 0)
-        if len(coords) > 0:  # Ensure there are non-zero mask regions
-            y0, x0 = coords.min(axis=0)
-            y1, x1 = coords.max(axis=0) + 1
-            roi_cropped = roi[y0:y1, x0:x1, :]
-        else:
-            roi_cropped = roi  # Return full image if no ROI is found
+        y0, x0 = coords.min(axis=0)
+        y1, x1 = coords.max(axis=0) + 1
+        roi_cropped = roi[y0:y1, x0:x1, :]
         return roi_cropped
 
     def add_padding(self, image, target_size, padding_value=0):
@@ -395,38 +401,58 @@ class ImageClassifier:
         masked_image = image * binary_mask
         return masked_image
     
-    def erase_masks(self, cropped_label: np.ndarray) -> np.ndarray:
+    def erase_masks(self, cropped_label: np.ndarray, cx: int, cy: int) -> np.ndarray:
         """
-        Erases all masks in the cropped_label that do not overlap with the centroid.
+        Erases all masks in the cropped_label (yx format) that do not overlap with the centroid.
+        Data is modified in-place.
         """
+        # Fast option assumes overlap of centroid with a label
+        id = cropped_label[cy, cx]
+        if id == 0:
+            # This should not happen, log it so the user can investigate
+            logger.warning(f"No label at {cx},{cy}")
+            # Find closest label
+            dmin = np.product(np.array(cropped_label.shape))
+            dmin = dmin**2
+            for p in regionprops(cropped_label):
+                y, x = p.centroid
+                d = (cx-x)**2 + (cy-y)**2
+                if d < dmin:
+                    dmin = d
+                    id = p.label
+            if id == 0:
+                raise Exception(f"No label at {cx},{cy}")
 
-        center_row, center_col = np.array(cropped_label.shape) // 2
+        cropped_label[cropped_label != id] = 0
+        return cropped_label
 
-        unique_labels = np.unique(cropped_label)
-        for unique_label in unique_labels:
-            if unique_label == 0:  # Skip background
-                continue
+        # center_row, center_col = np.array(cropped_label.shape) // 2
 
-            binary_mask = cropped_label == unique_label
+        # unique_labels = np.unique(cropped_label)
+        # for unique_label in unique_labels:
+        #     if unique_label == 0:  # Skip background
+        #         continue
 
-            if np.sum(binary_mask) == 0:  # Check for empty masks
-                continue
+        #     binary_mask = cropped_label == unique_label
 
-            label_props = regionprops(label(binary_mask))
+        #     if np.sum(binary_mask) == 0:  # Check for empty masks
+        #         continue
 
-            if len(label_props) == 1:
-                cropped_centroid_row, cropped_centroid_col = label_props[
-                    0
-                ].centroid
+        #     label_props = regionprops(label(binary_mask))
 
-                # Using a small tolerance value for comparing centroids
-                tol = 15
+        #     if len(label_props) == 1:
+        #         cropped_centroid_row, cropped_centroid_col = label_props[
+        #             0
+        #         ].centroid
 
-                if (
-                    abs(cropped_centroid_row - center_row) > tol
-                    or abs(cropped_centroid_col - center_col) > tol
-                ):
-                    cropped_label[binary_mask] = 0
+        #         # Using a small tolerance value for comparing centroids
+        #         tol = 15
+
+        #         if (
+        #             abs(cropped_centroid_row - center_row) > tol
+        #             or abs(cropped_centroid_col - center_col) > tol
+        #         ):
+        #             cropped_label[binary_mask] = 0
 
         return cropped_label
     
