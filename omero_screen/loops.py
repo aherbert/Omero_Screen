@@ -189,7 +189,7 @@ def process_wells(
                     ax.axis('off')
 
             plt.tight_layout()
-            output_path = pathlib.Path.home() / "{class_name}_gallery_10x10.png"
+            output_path = pathlib.Path.home() / f"{class_name}_gallery_10x10.png"
             plt.savefig(output_path, bbox_inches="tight", facecolor="white")
             logger.info(f"Gallery saved for class '{class_name}' at {output_path}")
             plt.close()
