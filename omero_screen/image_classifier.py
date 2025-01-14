@@ -54,73 +54,53 @@ class ImageClassifier:
         
         file_path = pathlib.Path.home() / model_filename
 
-        # If the model file exists locally
-        if os.path.exists(file_path):
-            logger.info(f"Model file '{model_filename}' already exists locally.")
-            
-            # Extract image channels
-            active_channels, class_options = self.download_metadata_and_extract_channels(dataset_name, conn)
+        # If the model file does not exist locally
+        if not os.path.exists(file_path):
+            # Find the project in OMERO
+            project = conn.getObject("Project", attributes={"name": project_name})
+            if project is None:
+                logger.warning(f"Project '{project_name}' not found in OMERO.")
+                return None, None
+    
+            # Find the dataset in OMERO
+            dataset = next((ds for ds in project.listChildren() if ds.getName() == dataset_name), None)
+            if dataset is None:
+                logger.warning(f"Dataset '{dataset_name}' not found in project '{project_name}'.")
+                return None, None
+    
+            # Check annotations in the dataset
+            model_found = False
+            for attachment in dataset.listAnnotations():
+                if isinstance(attachment, omero.gateway.FileAnnotationWrapper):
+                    # Download the model file
+                    if attachment.getFileName() == model_filename:
+                        with open(file_path, "wb") as f:
+                            for chunk in attachment.getFileInChunks():
+                                f.write(chunk)
+                        logger.info(f"Downloaded model file to {file_path}")
+                        model_found = True
+                        break
+            if not model_found:
+                logger.warning(f"File '{model_filename}' not found in dataset '{dataset_name}' under project '{project_name}'.")
+                return None, None
 
-            if active_channels:
-                print(f"Active Channels: {active_channels}")
-            else:
-                print("No active channels found.")
+        # If the model file is downloaded, download the Key-Value Pairs
+        # Extract image channels
+        active_channels, class_options = self.download_metadata_and_extract_channels(dataset_name, conn)
 
-            self.gallery_dict = {class_name: [] for class_name in class_options}
+        if active_channels:
+            print(f"Active Channels: {active_channels}")
+        else:
+            print("No active channels found.")
 
-            # Load the model
-            model = ROIBasedDenseNetModel(num_classes=len(class_options), num_channels=len(active_channels))
-            model.load_state_dict(torch.load(file_path, weights_only=True, map_location=torch.device('cpu')))
-            model = model.to(self.device)  # Move model to the device
-            model.eval()
-            return model, active_channels, class_options
+        self.gallery_dict = {class_name: [] for class_name in class_options}
 
-        # Find the project in OMERO
-        project = conn.getObject("Project", attributes={"name": project_name})
-        if project is None:
-            logger.warning(f"Project '{project_name}' not found in OMERO.")
-            return None, None
-
-        # Find the dataset in OMERO
-        dataset = next((ds for ds in project.listChildren() if ds.getName() == dataset_name), None)
-        if dataset is None:
-            logger.warning(f"Dataset '{dataset_name}' not found in project '{project_name}'.")
-            return None, None
-
-        # Check annotations in the dataset
-        model_found = False
-        for attachment in dataset.listAnnotations():
-            if isinstance(attachment, omero.gateway.FileAnnotationWrapper):
-                # Download the model file
-                if attachment.getFileName() == model_filename:
-                    with open(file_path, "wb") as f:
-                        for chunk in attachment.getFileInChunks():
-                            f.write(chunk)
-                    logger.info(f"Downloaded model file to {file_path}")
-                    model_found = True
-
-        # If the model file was downloaded, download the Key-Value Pairs
-        if model_found:
-            # Extract image channels
-            active_channels, class_options = self.download_metadata_and_extract_channels(dataset_name, conn)
-
-            if active_channels:
-                print(f"Active Channels: {active_channels}")
-            else:
-                print("No active channels found.")
-
-            self.gallery_dict = {class_name: [] for class_name in class_options}
-
-            # Load the model
-            model = ROIBasedDenseNetModel(num_classes=len(class_options), num_channels=len(active_channels))
-            model.load_state_dict(torch.load(file_path, weights_only=True, map_location=torch.device('cpu')))
-            model = model.to(self.device)  # Move model to the device
-            model.eval()
-            return model, active_channels, class_options
-
-        # If the model was not found
-        logger.warning(f"File '{model_filename}' not found in dataset '{dataset_name}' under project '{project_name}'.")
-        return None, None
+        # Load the model
+        model = ROIBasedDenseNetModel(num_classes=len(class_options), num_channels=len(active_channels))
+        model.load_state_dict(torch.load(file_path, weights_only=True, map_location=torch.device('cpu')))
+        model = model.to(self.device)  # Move model to the device
+        model.eval()
+        return model, active_channels, class_options
     
     def download_metadata_and_extract_channels(self, dataset_name, conn):
         """
