@@ -7,11 +7,11 @@ from omero_screen.general_functions import omero_connect  # noqa: E402
 
 
 @omero_connect
-def main(plate_id, inference_model, gallery_width=0, options=None, conn=None):
+def main(plate_id, inference_model=None, gallery_width=0, options=None, conn=None):
     if options:
         Defaults.update(options)
 
-    plate_loop(plate_id, conn, inference_model, gallery_width=gallery_width)
+    plate_loop(plate_id, conn, inference_model=inference_model, gallery_width=gallery_width)
 
 
 if __name__ == "__main__":

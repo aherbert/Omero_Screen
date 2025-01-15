@@ -27,7 +27,7 @@ logger = logging.getLogger("omero-screen")
 gallery_dict = {}
 
 
-def well_loop(conn, well, metadata, project_data, flatfield_dict, inference_model, image_classifier):
+def well_loop(conn, well, metadata, project_data, flatfield_dict, image_classifier):
     print("\nSegmenting and Analysing Images\n")
     df_well = pd.DataFrame()
     df_well_quality = pd.DataFrame()
@@ -54,7 +54,7 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict, inference_mode
     return df_well, df_well_quality
 
 
-def plate_loop(plate_id: int, conn: BlitzGateway, inference_model, gallery_width: int = 0):
+def plate_loop(plate_id: int, conn: BlitzGateway, inference_model: str, gallery_width: int = 0):
     """
     Main loop to process a plate.
     :param plate_id: ID of the plate
@@ -127,7 +127,7 @@ def process_wells(
     project_data: ProjectSetup,
     flatfield_dict: dict,
     conn: BlitzGateway,
-    inference_model,
+    inference_model: str,
     gallery_width: int = 0
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -142,9 +142,10 @@ def process_wells(
     """
     df_final = pd.DataFrame()
     df_quality_control = pd.DataFrame()
-    image_classifier = ImageClassifier(conn, inference_model)
-    image_classifier.gallery_size = gallery_width**2
-    gallery_dict = {class_name: [] for class_name in image_classifier.gallery_dict.keys()}
+    image_classifier = None
+    if inference_model:
+        image_classifier = ImageClassifier(conn, inference_model)
+        image_classifier.gallery_size = gallery_width**2
     for count, well in enumerate(list(metadata.plate_obj.listChildren())):
         ann = well.getAnnotation(Defaults["NS"])
         try:
@@ -156,45 +157,39 @@ def process_wells(
             print(message)
             print("Gallery dict keys :",gallery_dict.keys())
             well_data, well_quality = well_loop(
-                conn, well, metadata, project_data, flatfield_dict, inference_model=inference_model, image_classifier=image_classifier
+                conn, well, metadata, project_data, flatfield_dict, image_classifier=image_classifier
             )
             df_final = pd.concat([df_final, well_data])
             df_quality_control = pd.concat([df_quality_control, well_quality])
-        
-        # Collect gallery images for each class
-        for class_name, images in image_classifier.gallery_dict.items():
-            if images:
-                gallery_dict[class_name].extend(images)
-
-        image_classifier.gallery_dict = {class_name: [] for class_name in image_classifier.class_options}
 
     # Create and save galleries after the loop
-    if gallery_width:
-        logger.info("Generating and saving gallery images")
-    for class_name, data in gallery_dict.items():
-        selected_images, total = data
-        if selected_images:
-            grid_size = gallery_width
-
-            fig, axs = plt.subplots(grid_size, grid_size, figsize=(20, 20), facecolor="white")
-            axs = axs.reshape(grid_size, grid_size)  # Ensure axs is a 2D grid
-
-            for idx, ax in enumerate(axs.flat):
-                if idx < len(selected_images):
-                    if selected_images[idx].shape[-1] == 2:  # If there is 2 channels
-                        ax.imshow(selected_images[idx][:, :, 0], cmap='gray')
-                        ax.set_title(f"{class_name} {idx + 1} (Channel 1)", fontsize=8)
+    if image_classifier is not None:
+        if gallery_width:
+            logger.info("Generating and saving gallery images")
+        for class_name, data in image_classifier.gallery_dict.items():
+            selected_images, total = data
+            if selected_images:
+                grid_size = gallery_width
+    
+                fig, axs = plt.subplots(grid_size, grid_size, figsize=(20, 20), facecolor="white")
+                axs = axs.reshape(grid_size, grid_size)  # Ensure axs is a 2D grid
+    
+                for idx, ax in enumerate(axs.flat):
+                    if idx < len(selected_images):
+                        if selected_images[idx].shape[-1] == 2:  # If there is 2 channels
+                            ax.imshow(selected_images[idx][:, :, 0], cmap='gray')
+                            ax.set_title(f"{class_name} {idx + 1} (Channel 1)", fontsize=8)
+                        else:
+                            ax.imshow(selected_images[idx])
+                        ax.axis('off')
                     else:
-                        ax.imshow(selected_images[idx])
-                    ax.axis('off')
-                else:
-                    ax.axis('off')
-
-            plt.tight_layout()
-            output_path = pathlib.Path.home() / f"{class_name}_gallery_10x10.png"
-            plt.savefig(output_path, bbox_inches="tight", facecolor="white")
-            logger.info(f"Gallery saved for class '{class_name}' at {output_path}: {len(selected_images)}/{total}")
-            plt.close()
+                        ax.axis('off')
+    
+                plt.tight_layout()
+                output_path = pathlib.Path.home() / f"{class_name}_gallery_10x10.png"
+                plt.savefig(output_path, bbox_inches="tight", facecolor="white")
+                logger.info(f"Gallery saved for class '{class_name}' at {output_path}: {len(selected_images)}/{total}")
+                plt.close()
 
     return df_final, df_quality_control
 

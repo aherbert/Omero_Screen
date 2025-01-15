@@ -232,9 +232,9 @@ class ImageProperties:
         self.quality_df = self._concat_quality_df()
         self.gallery_dict = {}
 
-        image_classifier.select_channels(image_obj.img_dict)
-        df_with_predicted_classes = image_classifier.process_images(self.image_df, image_obj.c_mask)
-        self.image_df = df_with_predicted_classes
+        if image_classifier is not None:
+            image_classifier.select_channels(image_obj.img_dict)
+            self.image_df = image_classifier.process_images(self.image_df, image_obj.c_mask)
 
     def _overlay_mask(self) -> pd.DataFrame:
         """Links nuclear IDs with cell IDs"""
