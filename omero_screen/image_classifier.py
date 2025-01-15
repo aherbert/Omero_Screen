@@ -14,6 +14,7 @@ from matplotlib.colors import Normalize
 from io import BytesIO
 import logging
 import pathlib
+from random import randrange
 
 from omero_screen.models import ROIBasedDenseNetModel
 
@@ -36,6 +37,7 @@ class ImageClassifier:
         """
         self.image_data = None
         self.crop_size = 100
+        self.gallery_size = 0
         if torch.cuda.is_available():
             self.device = "cuda"
         else:
@@ -93,7 +95,8 @@ class ImageClassifier:
         else:
             print("No active channels found.")
 
-        self.gallery_dict = {class_name: [] for class_name in class_options}
+        # list of random samples, total number of items
+        self.gallery_dict = {class_name: [[], 0] for class_name in class_options}
 
         # Load the model
         model = ROIBasedDenseNetModel(num_classes=len(class_options), num_channels=len(active_channels))
@@ -249,9 +252,25 @@ class ImageClassifier:
             image_tensor = image_tensor.to(self.device)
 
             predicted_class = self.classify(image_tensor)
-            processed_image = self.create_heatmap_with_contours(latest_image)
-            self.gallery_dict[predicted_class].append(processed_image)
             predicted_classes.append(predicted_class)
+            
+            # Optional gallery
+            if self.gallery_size:
+                a = self.gallery_dict[predicted_class]
+                # list of random samples, total number of items
+                l, s = a
+                s = s + 1
+                a[1] = s
+                if s <= self.gallery_size:
+                    # Gallery size not yet reached
+                    processed_image = self.create_heatmap_with_contours(latest_image)
+                    l.append(processed_image)
+                else:
+                    # Randomly replace a gallery image
+                    i = randrange(s)
+                    if i < self.gallery_size:
+                        processed_image = self.create_heatmap_with_contours(latest_image)
+                        l[i] = processed_image
 
         # This gives an warning:
         # A value is trying to be set on a copy of a slice from a DataFrame.

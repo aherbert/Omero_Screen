@@ -21,7 +21,9 @@ if __name__ == "__main__":
     )
     
     group.add_argument("--inference", type=str, metavar="MODEL", 
-                        help="Run inference on the dataset using a pre-trained model. Specify the model filename.")
+        help="Inference model filename.")
+    group.add_argument("--gallery", type=int, default=0,
+        help="Width N of for the inference galleray NxN (default: %(default)s)")
     args = parser.parse_args()
 
     # Create overrides
@@ -38,4 +40,4 @@ if __name__ == "__main__":
     # lazy import to speed up parsing errors
     import omero_screen.main
 
-    omero_screen.main.main(args.ID, args.inference, options=opt)
+    omero_screen.main.main(args.ID, args.inference, gallery_width=args.gallery, options=opt)

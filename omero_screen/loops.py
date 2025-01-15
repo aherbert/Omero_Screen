@@ -8,7 +8,7 @@ from omero_screen.image_analysis import Image, ImageProperties
 from omero_screen.image_analysis_nucleus import NucImage, NucImageProperties
 from omero_screen.omero_functions import load_fig, load_csvdata, delete_annotations
 from omero_screen.quality_figure import quality_control_fig
-from omero_screen.cellcycle_analysis import cellcycle_analysis, combplot, cellcycle_prop
+from omero_screen.cellcycle_analysis import cellcycle_analysis, combplot
 from omero_screen.general_functions import omero_connect
 
 from omero.gateway import BlitzGateway
@@ -19,7 +19,6 @@ import pathlib
 from typing import Tuple
 import logging
 import matplotlib.pyplot as plt
-import random
 
 logger = logging.getLogger("omero-screen")
 # Functions to loop through well object, assemble data for images and ave quality control data
@@ -29,7 +28,7 @@ gallery_dict = {}
 
 
 def well_loop(conn, well, metadata, project_data, flatfield_dict, inference_model, image_classifier):
-    print(f"\nSegmenting and Analysing Images\n")
+    print("\nSegmenting and Analysing Images\n")
     df_well = pd.DataFrame()
     df_well_quality = pd.DataFrame()
     image_number = len(list(well.listChildren()))
@@ -55,11 +54,13 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict, inference_mode
     return df_well, df_well_quality
 
 
-def plate_loop(plate_id: int, conn: BlitzGateway, inference_model):
+def plate_loop(plate_id: int, conn: BlitzGateway, inference_model, gallery_width: int = 0):
     """
     Main loop to process a plate.
     :param plate_id: ID of the plate
     :param conn: Connection to OMERO
+    :param inference_model: Inference model name
+    :param gallery_width: Width N of inference gallery (NxN)
     :return: Two DataFrames containing the final data and quality control data
     """
     logger.info(f"Processing plate {plate_id}")
@@ -78,7 +79,8 @@ def plate_loop(plate_id: int, conn: BlitzGateway, inference_model):
     print_device_info()
 
     df_final, df_quality_control = process_wells(
-        metadata, project_data, flatfield_dict, conn, inference_model=inference_model
+        metadata, project_data, flatfield_dict, conn, inference_model=inference_model,
+        gallery_width=gallery_width
     )
     logger.debug(f"Final data sample: {df_final.head()}")
     logger.debug(f"Final data columns: {df_final.columns}")
@@ -125,20 +127,23 @@ def process_wells(
     project_data: ProjectSetup,
     flatfield_dict: dict,
     conn: BlitzGateway,
-    inference_model
+    inference_model,
+    gallery_width: int = 0
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Process the wells of the plate.
-    :param wells: Wells to be processed
-    :param conn: Connection to OMERO
     :param metadata: Metadata associated with the plate
     :param project_data: Project setup data
     :param flatfield_dict: Dictionary containing flatfield correction data
+    :param conn: Connection to OMERO
+    :param inference_model: Inference model name
+    :param gallery_width: Width N of inference gallery (NxN)
     :return: Two DataFrames containing the final data and quality control data
     """
     df_final = pd.DataFrame()
     df_quality_control = pd.DataFrame()
     image_classifier = ImageClassifier(conn, inference_model)
+    image_classifier.gallery_size = gallery_width**2
     gallery_dict = {class_name: [] for class_name in image_classifier.gallery_dict.keys()}
     for count, well in enumerate(list(metadata.plate_obj.listChildren())):
         ann = well.getAnnotation(Defaults["NS"])
@@ -164,15 +169,12 @@ def process_wells(
         image_classifier.gallery_dict = {class_name: [] for class_name in image_classifier.class_options}
 
     # Create and save galleries after the loop
-    logger.info(f"Generating and saving gallery images")
-    for class_name, images in gallery_dict.items():
-        if images:
-            # Limit to max 100 images for gallery
-            num_images = min(len(images), 100)
-            grid_size = 10  # 10x10 grid
-
-            # Randomly select images
-            selected_images = random.sample(images, num_images) if len(images) > num_images else images
+    if gallery_width:
+        logger.info("Generating and saving gallery images")
+    for class_name, data in gallery_dict.items():
+        selected_images, total = data
+        if selected_images:
+            grid_size = gallery_width
 
             fig, axs = plt.subplots(grid_size, grid_size, figsize=(20, 20), facecolor="white")
             axs = axs.reshape(grid_size, grid_size)  # Ensure axs is a 2D grid
@@ -191,7 +193,7 @@ def process_wells(
             plt.tight_layout()
             output_path = pathlib.Path.home() / f"{class_name}_gallery_10x10.png"
             plt.savefig(output_path, bbox_inches="tight", facecolor="white")
-            logger.info(f"Gallery saved for class '{class_name}' at {output_path}")
+            logger.info(f"Gallery saved for class '{class_name}' at {output_path}: {len(selected_images)}/{total}")
             plt.close()
 
     return df_final, df_quality_control
