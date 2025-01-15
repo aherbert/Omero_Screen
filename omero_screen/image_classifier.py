@@ -429,7 +429,7 @@ class ImageClassifier:
             # Find closest label
             dmin = np.product(np.array(cropped_label.shape))
             dmin = dmin**2
-            for p in regionprops(cropped_label):
+            for p in regionprops(cropped_label.astype(int)):
                 y, x = p.centroid
                 d = (cx-x)**2 + (cy-y)**2
                 if d < dmin:
