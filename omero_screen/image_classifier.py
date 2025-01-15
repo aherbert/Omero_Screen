@@ -39,7 +39,7 @@ class ImageClassifier:
         self.crop_size = 100
         self.gallery_size = 0
         if torch.cuda.is_available():
-            self.device = "cuda"
+            self.device = torch.device("cuda")
         else:
             self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
         self.cropped_images = []
