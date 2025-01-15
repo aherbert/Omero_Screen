@@ -118,7 +118,7 @@ class Image:
                     scaled_img_t, channels=n_channels, diameter=self.nuc_diameter, normalize=False
                 )
             except IndexError:
-                n_mask_array = np.zeros_like(scaled_img_t)
+                n_mask_array = np.zeros_like(scaled_img_t).astype(np.uint16)
             # Store the segmentation mask in the corresponding timepoint
             segmentation_masks[t] = filter_segmentation(n_mask_array)
         return segmentation_masks
@@ -156,7 +156,7 @@ class Image:
                     comb_image_t, channels=c_channels, normalize=False
                 )
             except IndexError:
-                c_masks_array = np.zeros_like(comb_image_t)
+                c_masks_array = np.zeros_like(comb_image_t).astype(np.uint16)
             
             # Store the segmentation mask in the corresponding timepoint
             segmentation_masks[t] = filter_segmentation(c_masks_array)
