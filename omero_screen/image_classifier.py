@@ -181,14 +181,12 @@ class ImageClassifier:
         unique_images = images.drop_duplicates(subset=cyto_id_column, keep='first')
         return unique_images
     
-    def process_images(self, images, mask):
-
-        original_images = images.copy()
+    def process_images(self, original_images, mask):
 
         predicted_classes = []
 
-        print("Images length before removing duplicates : ", len(images))
-        images = self.remove_duplicate_cyto_ids(images)
+        print("Images length before removing duplicates : ", len(original_images))
+        images = self.remove_duplicate_cyto_ids(original_images)
         print("Images length after removing duplicates : ", len(images))
 
         target_size = (100, 100)  # Target size (height, width)
@@ -272,9 +270,7 @@ class ImageClassifier:
                         processed_image = self.create_heatmap_with_contours(latest_image)
                         l[i] = processed_image
 
-        # This gives an warning:
-        # A value is trying to be set on a copy of a slice from a DataFrame.
-        images["Class"] = predicted_classes
+        images = images.assign(Class=predicted_classes)
 
         original_images = original_images.merge(
             images[["Cyto_ID", "Class"]], 
