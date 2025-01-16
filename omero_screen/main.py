@@ -11,7 +11,7 @@ def main(plate_id, inference_model=None, gallery_width=0, options=None, conn=Non
     if options:
         Defaults.update(options)
 
-    plate_loop(plate_id, conn, inference_model=inference_model, gallery_width=gallery_width)
+    plate_loop(plate_id, conn)
 
 
 if __name__ == "__main__":

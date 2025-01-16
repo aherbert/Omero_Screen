@@ -54,13 +54,11 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict, image_classifi
     return df_well, df_well_quality
 
 
-def plate_loop(plate_id: int, conn: BlitzGateway, inference_model: str, gallery_width: int = 0):
+def plate_loop(plate_id: int, conn: BlitzGateway):
     """
     Main loop to process a plate.
     :param plate_id: ID of the plate
     :param conn: Connection to OMERO
-    :param inference_model: Inference model name
-    :param gallery_width: Width N of inference gallery (NxN)
     :return: Two DataFrames containing the final data and quality control data
     """
     logger.info(f"Processing plate {plate_id}")
@@ -78,10 +76,7 @@ def plate_loop(plate_id: int, conn: BlitzGateway, inference_model: str, gallery_
 
     print_device_info()
 
-    df_final, df_quality_control = process_wells(
-        metadata, project_data, flatfield_dict, conn, inference_model=inference_model,
-        gallery_width=gallery_width
-    )
+    df_final, df_quality_control = process_wells(metadata, project_data, flatfield_dict, conn)
     logger.debug(f"Final data sample: {df_final.head()}")
     logger.debug(f"Final data columns: {df_final.columns}")
     # check conditiosn for cell cycle analysis
@@ -127,8 +122,6 @@ def process_wells(
     project_data: ProjectSetup,
     flatfield_dict: dict,
     conn: BlitzGateway,
-    inference_model: str,
-    gallery_width: int = 0
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Process the wells of the plate.
@@ -143,9 +136,12 @@ def process_wells(
     df_final = pd.DataFrame()
     df_quality_control = pd.DataFrame()
     image_classifier = None
+    inference_model = Defaults['INFERENCE_MODEL']
     if inference_model:
         image_classifier = ImageClassifier(conn, inference_model)
+        gallery_width =  Defaults["INFERENCE_GALLERY_WIDTH"]
         image_classifier.gallery_size = gallery_width**2
+        image_classifier.batch_size = Defaults["INFERENCE_BATCH_SIZE"]
     for count, well in enumerate(list(metadata.plate_obj.listChildren())):
         ann = well.getAnnotation(Defaults["NS"])
         try:

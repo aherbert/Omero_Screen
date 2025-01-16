@@ -198,7 +198,7 @@ class ImageClassifier:
 
         # Batch processing
         total = len(images["centroid-0"])
-        step = 32
+        step = self.batch_size
         pbar = tqdm(total=total)
         for start in range(0, total, step):
             stop = min(start+step, total)
