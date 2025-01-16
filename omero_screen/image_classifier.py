@@ -46,7 +46,6 @@ class ImageClassifier:
         self.processed_images = []  # Store processed image data for all images
         self.crop_coords_list = []  # Store crop coordinates for all images
         self.selected_channels = {}
-        self.predicted_classes = []
         self.gallery_dict = {}
 
         self.model, self.active_channels, self.class_options = self.load_model_from_omero("CNN_Models", model_name, model_name+".pth", conn)
@@ -291,7 +290,6 @@ class ImageClassifier:
 
         class_names = self.class_options
         predicted_class = class_names[int(predicted.item())]
-        self.predicted_classes.append(predicted_class)
 
         return predicted_class
 
