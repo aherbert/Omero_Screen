@@ -38,6 +38,7 @@ class ImageClassifier:
         self.image_data = None
         self.crop_size = 100
         self.gallery_size = 0
+        self.batch_size = 16
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
         else:
@@ -191,83 +192,82 @@ class ImageClassifier:
         target_size = (100, 100)  # Target size (height, width)
         half_crop = self.crop_size // 2
 
-        for i in tqdm(range(len(images["centroid-0"]))):
+        # Assume YX are the last dimensions
+        max_length_x = self.selected_channels[self.active_channels[0]].shape[-1]
+        max_length_y = self.selected_channels[self.active_channels[0]].shape[-2]
 
-            # Center the crop around the centroid coordinates with a 100x100 area
-            # Assume YX are the last dimensions
-            max_length_x = self.selected_channels[self.active_channels[0]].shape[-1]
-            max_length_y = self.selected_channels[self.active_channels[0]].shape[-2]
+        # Batch processing
+        total = len(images["centroid-0"])
+        step = 32
+        pbar = tqdm(total=total)
+        for start in range(0, total, step):
+            stop = min(start+step, total)
+            pbar.n = stop
+            pbar.refresh()
 
-            centroid_x = images["centroid-1_x"].iloc[i]
-            centroid_y = images["centroid-0_y"].iloc[i]
-
-            x0 = int(max(0, centroid_x - half_crop))
-            x1 = int(min(max_length_x, centroid_x + half_crop))
-            y0 = int(max(0, centroid_y - half_crop))
-            y1 = int(min(max_length_y, centroid_y + half_crop))
-
-            combined_channels = []
-
-            # Crop mask
-            cropped_mask = self.crop(mask, x0, y0, x1, y1).copy()
-            # Pass in the translated centroid allowing for the crop to clip
-            cx = min(half_crop, int(centroid_x))
-            cy = min(half_crop, int(centroid_y))
-            corrected_mask = self.erase_masks(cropped_mask, cx, cy)
-            # Convert mask to binary
-            binary_mask = (corrected_mask > 0).astype(np.uint8)
-
-            for channel in self.selected_channels:
+            batch = []
+            for i in range(start, stop):
+                # Center the crop around the centroid coordinates with a 100x100 area
+                centroid_x = images["centroid-1_x"].iloc[i]
+                centroid_y = images["centroid-0_y"].iloc[i]
+    
+                x0 = int(max(0, centroid_x - half_crop))
+                x1 = int(min(max_length_x, centroid_x + half_crop))
+                y0 = int(max(0, centroid_y - half_crop))
+                y1 = int(min(max_length_y, centroid_y + half_crop))
+    
+                combined_channels = []
+    
+                # Crop mask
+                cropped_mask = self.crop(mask, x0, y0, x1, y1).copy()
+                # Pass in the translated centroid allowing for the crop to clip
+                cx = min(half_crop, int(centroid_x))
+                cy = min(half_crop, int(centroid_y))
+                corrected_mask = self.erase_masks(cropped_mask, cx, cy)
+                # Convert mask to binary
+                binary_mask = (corrected_mask > 0).astype(np.uint8)
+    
                 # Crop image
-                cropped_image = self.crop(self.selected_channels[channel], x0, y0, x1, y1)
-                masked_image = self.extract_roi_multichannel(cropped_image, binary_mask)
-                # Add the masked image to the list for combining channels
-                combined_channels.append(masked_image)
-            
-            if len(combined_channels) > 1:
-                # Combine channels if there is more than one channel
-                latest_image = np.dstack(combined_channels)
-                # latest_image = np.stack(combined_channels, axis=0)
-                # latest_image = np.squeeze(latest_image)
-                # latest_image = np.transpose(latest_image, (1, 2, 0))
-            else:
-                latest_image = masked_image
+                for channel in self.selected_channels:
+                    cropped_image = self.crop(self.selected_channels[channel], x0, y0, x1, y1)
+                    combined_channels.append(cropped_image)
+    
+                # Remove pixels outside the mask
+                latest_image = self.extract_roi_multichannel(np.stack(combined_channels), binary_mask)
+                
+                # Normalise
+                max_val = np.max(latest_image, axis=(1,2))
+                padded_image = self.add_padding(latest_image / max_val[:,None,None], target_size)
+                batch.append(padded_image)
 
-            max_val = np.max(latest_image)
-            latest_image = self.add_padding(latest_image, target_size)
+            # Create tensor (B, C, H, W)
+            batch = np.array(batch)
+            image_tensor = torch.tensor(batch, dtype=torch.float32)
+            image_tensor = transforms.Resize((224,224))(image_tensor)
 
-            data_transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Resize((224, 224)),
-                transforms.ConvertImageDtype(torch.float32),
-                transforms.Lambda(lambda x: x / max_val),
-                # transforms.Normalize([0.5], [0.5])
-            ])
-
-            image_tensor = data_transform(latest_image) 
-            image_tensor = image_tensor.unsqueeze(0)
-            image_tensor = image_tensor.to(self.device)
-
-            predicted_class = self.classify(image_tensor)
-            predicted_classes.append(predicted_class)
+            classes = self.classify(image_tensor)
+            predicted_classes.extend(classes)
             
             # Optional gallery
             if self.gallery_size:
-                a = self.gallery_dict[predicted_class]
-                # list of random samples, total number of items
-                l, s = a
-                s = s + 1
-                a[1] = s
-                if s <= self.gallery_size:
-                    # Gallery size not yet reached
-                    processed_image = self.create_heatmap_with_contours(latest_image)
-                    l.append(processed_image)
-                else:
-                    # Randomly replace a gallery image
-                    i = randrange(s)
-                    if i < self.gallery_size:
-                        processed_image = self.create_heatmap_with_contours(latest_image)
-                        l[i] = processed_image
+                for idx, predicted_class in enumerate(classes):
+                    a = self.gallery_dict[predicted_class]
+                    # list of random samples, total number of items
+                    l, s = a
+                    s = s + 1
+                    a[1] = s
+                    # Image must be 2D, take the first channel
+                    img = batch[idx][0]
+                    if s <= self.gallery_size:
+                        # Gallery size not yet reached
+                        processed_image = self.create_heatmap_with_contours(img)
+                        l.append(processed_image)
+                    else:
+                        # Randomly replace a gallery image
+                        i = randrange(s)
+                        if i < self.gallery_size:
+                            processed_image = self.create_heatmap_with_contours(img)
+                            l[i] = processed_image
 
         images = images.assign(Class=predicted_classes)
 
@@ -282,14 +282,18 @@ class ImageClassifier:
 
     def classify(self, image_tensor):
 
-        self.model.eval()
+        # self.model.eval()
+        image_tensor = image_tensor.to(self.device)
 
         with torch.no_grad():
+            # Model takes a tensor of (B, C, H, W)
             outputs = self.model(image_tensor)
+            # Find maximum of all elements along dim=1 (i.e. classification): (values, indices)
             _, predicted = torch.max(outputs.data, 1)
+            predicted = predicted.cpu()
 
         class_names = self.class_options
-        predicted_class = class_names[int(predicted.item())]
+        predicted_class = [class_names[x] for x in predicted]
 
         return predicted_class
 
@@ -321,33 +325,17 @@ class ImageClassifier:
             Cropped image as a numpy array.
             Note: This uses the same underlying data.
         """
-        # Ensure coordinates are valid
-        if x1 < x0:
-            x0, x1 = x1, x0  # Swap values if x1 is less than x0
-        if y1 < y0:
-            y0, y1 = y1, y0  # Swap values if y1 is less than y0
-
         # Crop with numpy to return a 2D image with YX as last dimensions
         i = image.squeeze()
         if i.ndim != 2:
             raise Exception("Image classifier only supports 2D images: " + image.shape)
         return i[y0:y1, x0:x1]
-
-        # # Convert image to PIL format if it's a numpy array
-        # if isinstance(image, np.ndarray):
-        #     image = PILImage.fromarray(image)
-        
-        # # Crop the image using the corrected coordinates
-        # cropped_image = image.crop((x0, y0, x1, y1))
-        
-        # # Convert back to numpy array for further processing
-        # return np.array(cropped_image)
     
     def extract_roi_multichannel(self, image, binary_mask):
         """
         Extracts the ROI (Region of Interest) from a multi-channel image using the mask.
         Args:
-            image (numpy array): Multi-channel input image (height, width, channels).
+            image (numpy array): Multi-channel input image (channels, height, width).
             binary_mask (numpy array): Mask image (should have the same height and width).
         Returns:
             numpy array: Cropped ROI with masked regions.
@@ -363,13 +351,13 @@ class ImageClassifier:
 
         # Apply the mask to all channels
         roi = np.zeros_like(image)
-        for channel in range(image.shape[-1]):
-            roi[..., channel] = image[..., channel] * binary_mask
+        for channel in range(image.shape[0]):
+            roi[channel, ...] = image[channel, ...] * binary_mask
 
         # Crop the masked region
         y0, x0 = coords.min(axis=0)
         y1, x1 = coords.max(axis=0) + 1
-        roi_cropped = roi[y0:y1, x0:x1, :]
+        roi_cropped = roi[:, y0:y1, x0:x1]
         return roi_cropped
 
     def add_padding(self, image, target_size, padding_value=0):
@@ -377,14 +365,14 @@ class ImageClassifier:
         Adds padding to a NumPy array image to reach the target size.
 
         Args:
-            image (np.ndarray): Input image as a NumPy array (H, W) or (H, W, C).
+            image (np.ndarray): Input image as a NumPy array (H, W) or (C, H, W).
             target_size (tuple): Target size as (height, width).
             padding_value (int): Value to use for padding (default: 0).
 
         Returns:
             np.ndarray: Padded image with the desired target size.
         """
-        current_height, current_width = image.shape[:2]
+        current_height, current_width = image.shape[-2:]
         target_height, target_width = target_size
 
         # Calculate the padding needed
@@ -401,7 +389,7 @@ class ImageClassifier:
         if image.ndim == 2:  # Grayscale image
             padding_config = ((pad_top, pad_bottom), (pad_left, pad_right))
         elif image.ndim == 3:  # RGB or multi-channel image
-            padding_config = ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0))
+            padding_config = ((0, 0), (pad_top, pad_bottom), (pad_left, pad_right))
         else:
             raise ValueError("Unsupported image dimensions. Image must be 2D or 3D.")
 
@@ -437,36 +425,6 @@ class ImageClassifier:
                 raise Exception(f"No label at {cx},{cy}")
 
         cropped_label[cropped_label != id] = 0
-        return cropped_label
-
-        # center_row, center_col = np.array(cropped_label.shape) // 2
-
-        # unique_labels = np.unique(cropped_label)
-        # for unique_label in unique_labels:
-        #     if unique_label == 0:  # Skip background
-        #         continue
-
-        #     binary_mask = cropped_label == unique_label
-
-        #     if np.sum(binary_mask) == 0:  # Check for empty masks
-        #         continue
-
-        #     label_props = regionprops(label(binary_mask))
-
-        #     if len(label_props) == 1:
-        #         cropped_centroid_row, cropped_centroid_col = label_props[
-        #             0
-        #         ].centroid
-
-        #         # Using a small tolerance value for comparing centroids
-        #         tol = 15
-
-        #         if (
-        #             abs(cropped_centroid_row - center_row) > tol
-        #             or abs(cropped_centroid_col - center_col) > tol
-        #         ):
-        #             cropped_label[binary_mask] = 0
-
         return cropped_label
     
     def create_heatmap_with_contours(self, image: np.ndarray, threshold_value: int = 10) -> np.ndarray:
