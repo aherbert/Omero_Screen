@@ -229,7 +229,6 @@ class ImageProperties:
         self._overlay = self._overlay_mask()
         self.image_df = self._combine_channels(featurelist)
         self.quality_df = self._concat_quality_df()
-        self.gallery_dict = {}
 
         if image_classifier is not None:
             image_classifier.select_channels(image_obj.img_dict)
