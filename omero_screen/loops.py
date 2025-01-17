@@ -154,15 +154,14 @@ def process_wells(
             df_quality_control = pd.concat([df_quality_control, well_quality])
 
     # Create and save galleries after the loop
-    if image_classifier is not None:
-        if gallery_width:
-            logger.info("Generating and saving gallery images")
-            for class_name, data in image_classifier.gallery_dict.items():
-                selected_images, total = data
-                if selected_images:
-                    output_path = pathlib.Path.home() / f"inference_{metadata.plate_id}_{class_name}.png"
-                    save_gallery(output_path, selected_images, gallery_width)
-                    logger.info(f"Gallery saved for class '{class_name}' at {output_path}: {len(selected_images)}/{total}")
+    if image_classifier is not None and gallery_width:
+        logger.info("Generating and saving gallery images")
+        for class_name, data in image_classifier.gallery_dict.items():
+            selected_images, total = data
+            if selected_images:
+                output_path = pathlib.Path.home() / f"inference_{metadata.plate_id}_{class_name}.png"
+                save_gallery(str(output_path.resolve()), selected_images, gallery_width)
+                logger.info(f"Gallery saved for class '{class_name}' at {output_path}: {len(selected_images)}/{total}")
 
     return df_final, df_quality_control
 
