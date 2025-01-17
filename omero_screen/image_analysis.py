@@ -19,6 +19,7 @@ import numpy as np
 import torch
 from cellpose import models
 
+
 logger = logging.getLogger("omero-screen")
 
 class Image:
@@ -218,7 +219,7 @@ class ImageProperties:
     and generates combined data frames.
     """
 
-    def __init__(self, well, image_obj, meta_data, featurelist=Defaults["FEATURELIST"]):
+    def __init__(self, well, image_obj, meta_data, featurelist=Defaults["FEATURELIST"], image_classifier=None):
         self._meta_data = meta_data
         self.plate_name = meta_data.plate_obj.getName()
         self._well = well
@@ -228,6 +229,10 @@ class ImageProperties:
         self._overlay = self._overlay_mask()
         self.image_df = self._combine_channels(featurelist)
         self.quality_df = self._concat_quality_df()
+
+        if image_classifier is not None:
+            image_classifier.select_channels(image_obj.img_dict)
+            self.image_df = image_classifier.process_images(self.image_df, image_obj.c_mask)
 
     def _overlay_mask(self) -> pd.DataFrame:
         """Links nuclear IDs with cell IDs"""

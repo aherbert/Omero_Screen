@@ -19,7 +19,13 @@ if __name__ == "__main__":
         action="store_true",
         help="add non cuda GPU option to Cellpose",
     )
-    
+
+    group.add_argument("--inference", type=str, default=None, metavar="MODEL",
+        help="Inference model filename.")
+    group.add_argument("--gallery", type=int, default=0,
+        help="Width N of for the inference galleray NxN (default: %(default)s)")
+    group.add_argument("--batch", type=int, default=16,
+        help="Classification batch size (default: %(default)s)")
     args = parser.parse_args()
 
     # Create overrides
@@ -32,6 +38,12 @@ if __name__ == "__main__":
         opt["DEBUG"] = True
     if args.gpu:
         opt["GPU"] = "GPU"
+    if args.inference:
+        opt["INFERENCE_MODEL"] = args.inference
+    if args.gallery:
+        opt["INFERENCE_GALLERY_WIDTH"] = args.gallery
+    if args.batch:
+        opt["INFERENCE_BATCH_SIZE"] = args.batch
 
     # lazy import to speed up parsing errors
     import omero_screen.main

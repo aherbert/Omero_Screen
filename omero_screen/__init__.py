@@ -103,4 +103,7 @@ Defaults = {
     "PROJECT_ID": project,
     "GPU": None,
     "MAGNIFICATION": "10x",
+    "INFERENCE_MODEL": None,
+    "INFERENCE_GALLERY_WIDTH": 0,
+    "INFERENCE_BATCH_SIZE": 16,
 }
