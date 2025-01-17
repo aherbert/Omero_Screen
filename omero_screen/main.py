@@ -6,11 +6,11 @@ from omero_screen.loops import plate_loop  # noqa: E402
 from omero_screen.general_functions import omero_connect  # noqa: E402
 
 
+
 @omero_connect
-def main(plate_id, inference_model=None, gallery_width=0, options=None, conn=None):
+def main(plate_id, options=None, conn=None):
     if options:
         Defaults.update(options)
-
     plate_loop(plate_id, conn)
 
 
