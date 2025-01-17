@@ -1,4 +1,4 @@
 {
-  "python.pythonPath": "/Users/hh65/mambaforge/envs/omero-screen/bin/python",
-  "python.terminal.activateEnvironment": true
+    "python.pythonPath": "/Users/hh65/mambaforge/envs/omero-screen/bin/python",
+    "python.terminal.activateEnvironment": true
 }
