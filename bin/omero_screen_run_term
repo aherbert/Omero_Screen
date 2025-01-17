@@ -19,8 +19,8 @@ if __name__ == "__main__":
         action="store_true",
         help="add non cuda GPU option to Cellpose",
     )
-    
-    group.add_argument("--inference", type=str, default=None, metavar="MODEL", 
+
+    group.add_argument("--inference", type=str, default=None, metavar="MODEL",
         help="Inference model filename.")
     group.add_argument("--gallery", type=int, default=0,
         help="Width N of for the inference galleray NxN (default: %(default)s)")

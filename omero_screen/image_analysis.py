@@ -12,8 +12,7 @@ from omero_screen.general_functions import (
 from omero_screen.omero_functions import upload_masks
 from ezomero import get_image
 
-from skimage import measure, io
-from skimage.measure import label, regionprops
+from skimage import measure
 import pandas as pd
 import numpy as np
 
@@ -220,7 +219,7 @@ class ImageProperties:
     and generates combined data frames.
     """
 
-    def __init__(self, well, image_obj, meta_data, image_classifier, featurelist=Defaults["FEATURELIST"]):
+    def __init__(self, well, image_obj, meta_data, featurelist=Defaults["FEATURELIST"], image_classifier=None):
         self._meta_data = meta_data
         self.plate_name = meta_data.plate_obj.getName()
         self._well = well
@@ -383,11 +382,5 @@ if __name__ == "__main__":
         print(df_image.head())
         print(df_image.columns)
         df_image.to_csv("~/Desktop/image_data.csv")
-        # This is from the kemal branch
-        # image_data = ImageProperties(well, image, meta_data, exp_paths)
-        # image.segmentation_figure()
-        # df_final = image_data.image_df
-        # df_final = pd.concat([df_final.loc[:, 'experiment':], df_final.loc[:, :'experiment']], axis=1).iloc[:, :-1]
-        # print(df_final)
 
     feature_extraction_test()

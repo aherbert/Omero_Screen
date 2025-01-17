@@ -24,9 +24,6 @@ import matplotlib.pyplot as plt
 logger = logging.getLogger("omero-screen")
 # Functions to loop through well object, assemble data for images and ave quality control data
 
-# Initialize the gallery dictionary
-gallery_dict = {}
-
 
 def well_loop(conn, well, metadata, project_data, flatfield_dict, image_classifier):
     print("\nSegmenting and Analysing Images\n")
@@ -35,13 +32,9 @@ def well_loop(conn, well, metadata, project_data, flatfield_dict, image_classifi
     image_number = len(list(well.listChildren()))
     for number in tqdm.tqdm(range(image_number)):
         omero_img = well.getImage(number)
-        ## hpc_version branch
-        # image = Image(conn, well, omero_img, metadata, project_data, flatfield_dict)
-        # image_data = ImageProperties(well, image, metadata)
-        ## kemal branch
         if "Tub" in metadata.channels.keys():
             image = Image(conn, well, omero_img, metadata, project_data, flatfield_dict)
-            image_data = ImageProperties(well, image, metadata, image_classifier)
+            image_data = ImageProperties(well, image, metadata, image_classifier=image_classifier)
         else:
             image = NucImage(
                 conn, well, omero_img, metadata, project_data, flatfield_dict
@@ -77,7 +70,9 @@ def plate_loop(plate_id: int, conn: BlitzGateway):
 
     print_device_info()
 
-    df_final, df_quality_control = process_wells(metadata, project_data, flatfield_dict, conn)
+    df_final, df_quality_control = process_wells(
+        metadata, project_data, flatfield_dict, conn
+    )
     logger.debug(f"Final data sample: {df_final.head()}")
     logger.debug(f"Final data columns: {df_final.columns}")
     # check conditiosn for cell cycle analysis
@@ -152,7 +147,6 @@ def process_wells(
         if cell_line != "Empty":
             message = f"{metadata.separator}\nAnalysing well row:{well.row}/col:{well.column} - {count + 1} of {metadata.plate_length}."
             print(message)
-            print("Gallery dict keys :",gallery_dict.keys())
             well_data, well_quality = well_loop(
                 conn, well, metadata, project_data, flatfield_dict, image_classifier=image_classifier
             )

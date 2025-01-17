@@ -46,9 +46,9 @@ class ImageClassifier:
 
         self.model, self.active_channels, self.class_options = self.load_model_from_omero("CNN_Models", model_name, model_name+".pth", conn)
 
-    def load_model_from_omero(self, project_name, dataset_name, 
+    def load_model_from_omero(self, project_name, dataset_name,
                                model_filename, conn=None):
-        
+
         file_path = pathlib.Path.home() / model_filename
 
         # If the model file does not exist locally
@@ -58,13 +58,13 @@ class ImageClassifier:
             if project is None:
                 logger.warning(f"Project '{project_name}' not found in OMERO.")
                 return None, None
-    
+
             # Find the dataset in OMERO
             dataset = next((ds for ds in project.listChildren() if ds.getName() == dataset_name), None)
             if dataset is None:
                 logger.warning(f"Dataset '{dataset_name}' not found in project '{project_name}'.")
                 return None, None
-    
+
             # Check annotations in the dataset
             model_found = False
             for attachment in dataset.listAnnotations():
@@ -99,16 +99,16 @@ class ImageClassifier:
         model = model.to(self.device)  # Move model to the device
         model.eval()
         return model, active_channels, class_options
-    
+
     def download_metadata_and_extract_channels(self, dataset_name, conn):
         """
         Download the metadata.json file associated with the model and extract active channels.
-        
+
         Args:
             dataset_name (str): The name of the dataset in OMERO.
             model_name (str): The name of the model (used to locate metadata.json).
             conn: OMERO connection object.
-        
+
         Returns:
             list: A list of active channels if found, otherwise an empty list.
         """
@@ -154,7 +154,7 @@ class ImageClassifier:
         except Exception as e:
             logger.error(f"Error reading metadata file '{metadata_file_name}': {e}")
             return []
-    
+
     def select_channels(self, image_data):
         self.image_data = image_data
         self.selected_channels = {channel: image_data[channel] for channel in self.active_channels}
@@ -175,7 +175,7 @@ class ImageClassifier:
         # Drop duplicates based on the Cyto_ID column
         unique_images = images.drop_duplicates(subset=cyto_id_column, keep='first')
         return unique_images
-    
+
     def process_images(self, original_images, mask):
 
         predicted_classes = []
@@ -205,14 +205,14 @@ class ImageClassifier:
                 # Center the crop around the centroid coordinates with a 100x100 area
                 centroid_x = images["centroid-1_x"].iloc[i]
                 centroid_y = images["centroid-0_y"].iloc[i]
-    
+
                 x0 = int(max(0, centroid_x - half_crop))
                 x1 = int(min(max_length_x, centroid_x + half_crop))
                 y0 = int(max(0, centroid_y - half_crop))
                 y1 = int(min(max_length_y, centroid_y + half_crop))
-    
+
                 combined_channels = []
-    
+
                 # Crop mask
                 cropped_mask = self.crop(mask, x0, y0, x1, y1).copy()
                 # Pass in the translated centroid allowing for the crop to clip
@@ -221,15 +221,15 @@ class ImageClassifier:
                 corrected_mask = self.erase_masks(cropped_mask, cx, cy)
                 # Convert mask to binary
                 binary_mask = (corrected_mask > 0).astype(np.uint8)
-    
+
                 # Crop image
                 for channel in self.selected_channels:
                     cropped_image = self.crop(self.selected_channels[channel], x0, y0, x1, y1)
                     combined_channels.append(cropped_image)
-    
+
                 # Remove pixels outside the mask
                 latest_image = self.extract_roi_multichannel(np.stack(combined_channels), binary_mask)
-                
+
                 # Normalise
                 max_val = np.max(latest_image, axis=(1,2))
                 padded_image = self.add_padding(latest_image / max_val[:,None,None], target_size)
@@ -242,7 +242,7 @@ class ImageClassifier:
 
             classes = self.classify(image_tensor)
             predicted_classes.extend(classes)
-            
+
             # Optional gallery
             if self.gallery_size:
                 for idx, predicted_class in enumerate(classes):
@@ -265,8 +265,8 @@ class ImageClassifier:
         images = images.assign(Class=predicted_classes)
 
         original_images = original_images.merge(
-            images[["Cyto_ID", "Class"]], 
-            on="Cyto_ID", 
+            images[["Cyto_ID", "Class"]],
+            on="Cyto_ID",
             how="left"
         )
 
@@ -293,12 +293,12 @@ class ImageClassifier:
     def crop(self, image, x0, y0, x1, y1):
         """
         Crops the input image using the provided coordinates.
-        
+
         Args:
             image (numpy array): The image to be cropped.
             x0, y0 (int): Top-left coordinates for cropping.
             x1, y1 (int): Bottom-right coordinates for cropping.
-        
+
         Returns:
             Cropped image as a numpy array.
             Note: This uses the same underlying data.
@@ -308,7 +308,7 @@ class ImageClassifier:
         if i.ndim != 2:
             raise Exception("Image classifier only supports 2D images: " + image.shape)
         return i[y0:y1, x0:x1]
-    
+
     def extract_roi_multichannel(self, image, binary_mask):
         """
         Extracts the ROI (Region of Interest) from a multi-channel image using the mask.
@@ -325,7 +325,7 @@ class ImageClassifier:
             return image
 
         if image.ndim == 2:  # Single channel (height, width)
-            image = np.expand_dims(image, axis=-1) 
+            image = np.expand_dims(image, axis=-1)
 
         # Apply the mask to all channels
         roi = np.zeros_like(image)
@@ -374,12 +374,12 @@ class ImageClassifier:
         # Apply padding
         padded_image = np.pad(image, padding_config, mode='constant', constant_values=padding_value)
         return padded_image
-    
+
     def mask_image(self, image, mask):
         binary_mask = mask / mask.max()  # Normalize between 0 and 1
         masked_image = image * binary_mask
         return masked_image
-    
+
     def erase_masks(self, cropped_label: np.ndarray, cx: int, cy: int) -> np.ndarray:
         """
         Erases all masks in the cropped_label (yx format) that do not overlap with the centroid.

@@ -38,7 +38,7 @@ def _create_heatmap_with_contours(image: np.ndarray, threshold_value: int = 10) 
         plt.plot(contour[:, :, 0], contour[:, :, 1], color='black', linewidth=1)  # Black contour lines
 
     plt.axis('off')  # Remove axes
-    
+
     # Render the figure to a buffer in memory
     buf = BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
@@ -61,12 +61,12 @@ def save_gallery(filename: str, images: list, grid_size: int):
     """
     fig, axs = plt.subplots(grid_size, grid_size, figsize=(20, 20), facecolor="white")
     axs = axs.reshape(grid_size, grid_size)  # Ensure axs is a 2D grid
-  
+
     for idx, ax in enumerate(axs.flat):
         if idx < len(images):
             ax.imshow(_create_heatmap_with_contours(images[idx]))
         ax.axis('off')
-  
+
     plt.tight_layout()
     plt.savefig(filename, bbox_inches="tight", facecolor="white")
     plt.close()
