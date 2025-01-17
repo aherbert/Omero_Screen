@@ -10,6 +10,7 @@ from omero_screen.omero_functions import load_fig, load_csvdata, delete_annotati
 from omero_screen.quality_figure import quality_control_fig
 from omero_screen.cellcycle_analysis import cellcycle_analysis, combplot
 from omero_screen.general_functions import omero_connect
+from omero_screen.gallery_figure import save_gallery
 
 from omero.gateway import BlitzGateway
 import tqdm
@@ -137,9 +138,9 @@ def process_wells(
     df_quality_control = pd.DataFrame()
     image_classifier = None
     inference_model = Defaults['INFERENCE_MODEL']
+    gallery_width =  Defaults["INFERENCE_GALLERY_WIDTH"]
     if inference_model:
         image_classifier = ImageClassifier(conn, inference_model)
-        gallery_width =  Defaults["INFERENCE_GALLERY_WIDTH"]
         image_classifier.gallery_size = gallery_width**2
         image_classifier.batch_size = Defaults["INFERENCE_BATCH_SIZE"]
     for count, well in enumerate(list(metadata.plate_obj.listChildren())):
@@ -162,30 +163,12 @@ def process_wells(
     if image_classifier is not None:
         if gallery_width:
             logger.info("Generating and saving gallery images")
-        for class_name, data in image_classifier.gallery_dict.items():
-            selected_images, total = data
-            if selected_images:
-                grid_size = gallery_width
-    
-                fig, axs = plt.subplots(grid_size, grid_size, figsize=(20, 20), facecolor="white")
-                axs = axs.reshape(grid_size, grid_size)  # Ensure axs is a 2D grid
-    
-                for idx, ax in enumerate(axs.flat):
-                    if idx < len(selected_images):
-                        if selected_images[idx].shape[-1] == 2:  # If there is 2 channels
-                            ax.imshow(selected_images[idx][:, :, 0], cmap='gray')
-                            ax.set_title(f"{class_name} {idx + 1} (Channel 1)", fontsize=8)
-                        else:
-                            ax.imshow(selected_images[idx])
-                        ax.axis('off')
-                    else:
-                        ax.axis('off')
-    
-                plt.tight_layout()
-                output_path = pathlib.Path.home() / f"{class_name}_gallery_10x10.png"
-                plt.savefig(output_path, bbox_inches="tight", facecolor="white")
-                logger.info(f"Gallery saved for class '{class_name}' at {output_path}: {len(selected_images)}/{total}")
-                plt.close()
+            for class_name, data in image_classifier.gallery_dict.items():
+                selected_images, total = data
+                if selected_images:
+                    output_path = pathlib.Path.home() / f"inference_{metadata.plate_id}_{class_name}.png"
+                    save_gallery(output_path, selected_images, gallery_width)
+                    logger.info(f"Gallery saved for class '{class_name}' at {output_path}: {len(selected_images)}/{total}")
 
     return df_final, df_quality_control
 

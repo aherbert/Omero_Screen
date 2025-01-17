@@ -1,17 +1,12 @@
-from skimage.measure import label, regionprops
+from skimage.measure import regionprops
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import omero
 
-from PIL import Image as PILImage
 from tqdm import tqdm
 import os
 import json
 from torchvision import transforms
-import cv2
-from matplotlib.colors import Normalize
-from io import BytesIO
 import logging
 import pathlib
 from random import randrange
@@ -260,14 +255,12 @@ class ImageClassifier:
                     img = batch[idx][0]
                     if s <= self.gallery_size:
                         # Gallery size not yet reached
-                        processed_image = self.create_heatmap_with_contours(img)
-                        l.append(processed_image)
+                        l.append(img)
                     else:
                         # Randomly replace a gallery image
                         i = randrange(s)
                         if i < self.gallery_size:
-                            processed_image = self.create_heatmap_with_contours(img)
-                            l[i] = processed_image
+                            l[i] = img
 
         images = images.assign(Class=predicted_classes)
 
@@ -296,21 +289,6 @@ class ImageClassifier:
         predicted_class = [class_names[x] for x in predicted]
 
         return predicted_class
-
-    def transform_image(self, image):
-
-        data_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Resize((224, 224)),
-            transforms.ConvertImageDtype(torch.float32),
-            transforms.Normalize([0.5], [0.5])
-        ])
-
-        image_tensor = data_transform(image)  # Apply transform
-        image_tensor = image_tensor.unsqueeze(0)  # Add batch dimension
-        image_tensor = image_tensor.to(self.device)
-
-        return image_tensor
 
     def crop(self, image, x0, y0, x1, y1):
         """
@@ -426,54 +404,3 @@ class ImageClassifier:
 
         cropped_label[cropped_label != id] = 0
         return cropped_label
-    
-    def create_heatmap_with_contours(self, image: np.ndarray, threshold_value: int = 10) -> np.ndarray:
-        """
-        Generates a heatmap with contours on a white background directly in memory.
-
-        Args:
-            image (np.ndarray): Input grayscale image (single channel).
-            threshold_value (int): Threshold value for contour detection (default: 50).
-
-        Returns:
-            np.ndarray: Processed image with heatmap and contours.
-        """
-        # Normalize the image to the range 0-255
-        image_normalized = cv2.normalize(image, None, 0, 255, cv2.NORM_MINMAX).astype('uint8')
-
-        # Ensure the image is single-channel
-        if len(image_normalized.shape) > 2:
-            if image_normalized.shape[2] == 3:  # If the image is RGB
-                image_normalized = cv2.cvtColor(image_normalized, cv2.COLOR_BGR2GRAY)
-            else:
-                return image
-
-        # Thresholding to reduce noise
-        _, thresholded_image = cv2.threshold(image_normalized, threshold_value, 255, cv2.THRESH_BINARY)
-
-        # Find contours in the thresholded image
-        contours, _ = cv2.findContours(thresholded_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        # Create a white background for the heatmap
-        plt.figure(figsize=(5, 5))
-        plt.imshow(np.ones_like(image_normalized) * 255, cmap='gray', vmin=0, vmax=255)  # White background
-        plt.imshow(image_normalized, cmap='Reds', norm=Normalize(vmin=0, vmax=255), alpha=0.9)  # Heatmap
-
-        # Draw contours
-        for contour in contours:
-            plt.plot(contour[:, :, 0], contour[:, :, 1], color='black', linewidth=1)  # Black contour lines
-
-        plt.axis('off')  # Remove axes
-        
-        # Render the figure to a buffer in memory
-        buf = BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
-        plt.close()
-
-        # Convert the buffer to a NumPy array
-        buf.seek(0)
-        image_pil = PILImage.open(buf)
-        processed_image = np.array(image_pil)
-        buf.close()
-
-        return processed_image
