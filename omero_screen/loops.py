@@ -1,5 +1,5 @@
-import omero_screen
 import os
+from omero_screen.image_classifier import ImageClassifier
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 from omero_screen import Defaults
 from omero_screen.metadata import MetaData, ProjectSetup
@@ -8,8 +8,9 @@ from omero_screen.image_analysis import Image, ImageProperties
 from omero_screen.image_analysis_nucleus import NucImage, NucImageProperties
 from omero_screen.omero_functions import load_fig, load_csvdata, delete_annotations
 from omero_screen.quality_figure import quality_control_fig
-from omero_screen.cellcycle_analysis import cellcycle_analysis, combplot, cellcycle_prop
+from omero_screen.cellcycle_analysis import cellcycle_analysis, combplot
 from omero_screen.general_functions import omero_connect
+from omero_screen.gallery_figure import save_gallery
 
 from omero.gateway import BlitzGateway
 import tqdm
@@ -18,24 +19,32 @@ import pandas as pd
 import pathlib
 from typing import Tuple
 import logging
+import matplotlib.pyplot as plt
 
 logger = logging.getLogger("omero-screen")
 # Functions to loop through well object, assemble data for images and ave quality control data
 
 
-def well_loop(conn, well, metadata, project_data, flatfield_dict):
-    print(f"\nSegmenting and Analysing Images\n")
+def well_loop(conn, well, metadata, project_data, flatfield_dict, image_classifier):
+    print("\nSegmenting and Analysing Images\n")
     df_well = pd.DataFrame()
     df_well_quality = pd.DataFrame()
     image_number = len(list(well.listChildren()))
     for number in tqdm.tqdm(range(image_number)):
         omero_img = well.getImage(number)
-        image = Image(conn, well, omero_img, metadata, project_data, flatfield_dict)
-        image_data = ImageProperties(well, image, metadata)
+        if "Tub" in metadata.channels.keys():
+            image = Image(conn, well, omero_img, metadata, project_data, flatfield_dict)
+            image_data = ImageProperties(well, image, metadata, image_classifier=image_classifier)
+        else:
+            image = NucImage(
+                conn, well, omero_img, metadata, project_data, flatfield_dict
+            )
+            image_data = NucImageProperties(well, image, metadata)
         df_image = image_data.image_df
         df_image_quality = image_data.quality_df
         df_well = pd.concat([df_well, df_image])
         df_well_quality = pd.concat([df_well_quality, df_image_quality])
+
     return df_well, df_well_quality
 
 
@@ -104,9 +113,6 @@ def print_device_info() -> None:
         print("Using Cellpose with CPU.")
 
 
-from typing import Tuple
-
-
 def process_wells(
     metadata: MetaData,
     project_data: ProjectSetup,
@@ -115,15 +121,23 @@ def process_wells(
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Process the wells of the plate.
-    :param wells: Wells to be processed
-    :param conn: Connection to OMERO
     :param metadata: Metadata associated with the plate
     :param project_data: Project setup data
     :param flatfield_dict: Dictionary containing flatfield correction data
+    :param conn: Connection to OMERO
+    :param inference_model: Inference model name
+    :param gallery_width: Width N of inference gallery (NxN)
     :return: Two DataFrames containing the final data and quality control data
     """
     df_final = pd.DataFrame()
     df_quality_control = pd.DataFrame()
+    image_classifier = None
+    inference_model = Defaults['INFERENCE_MODEL']
+    gallery_width =  Defaults["INFERENCE_GALLERY_WIDTH"]
+    if inference_model:
+        image_classifier = ImageClassifier(conn, inference_model)
+        image_classifier.gallery_size = gallery_width**2
+        image_classifier.batch_size = Defaults["INFERENCE_BATCH_SIZE"]
     for count, well in enumerate(list(metadata.plate_obj.listChildren())):
         ann = well.getAnnotation(Defaults["NS"])
         try:
@@ -134,10 +148,20 @@ def process_wells(
             message = f"{metadata.separator}\nAnalysing well row:{well.row}/col:{well.column} - {count + 1} of {metadata.plate_length}."
             print(message)
             well_data, well_quality = well_loop(
-                conn, well, metadata, project_data, flatfield_dict
+                conn, well, metadata, project_data, flatfield_dict, image_classifier=image_classifier
             )
             df_final = pd.concat([df_final, well_data])
             df_quality_control = pd.concat([df_quality_control, well_quality])
+
+    # Create and save galleries after the loop
+    if image_classifier is not None and gallery_width:
+        logger.info("Generating and saving gallery images")
+        for class_name, data in image_classifier.gallery_dict.items():
+            selected_images, total = data
+            if selected_images:
+                output_path = pathlib.Path.home() / f"inference_{metadata.plate_id}_{class_name}.png"
+                save_gallery(str(output_path.resolve()), selected_images, gallery_width)
+                logger.info(f"Gallery saved for class '{class_name}' at {output_path}: {len(selected_images)}/{total}")
 
     return df_final, df_quality_control
 

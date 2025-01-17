@@ -11,7 +11,7 @@ def create_job_script(args):
   # Validate installation
   omero_screen = 'Omero_Screen'
   omero_screen_prog = 'omero_screen_run_term'
-  conda_module = 'Anaconda3/2022.05'
+  conda_module = 'Anaconda3/2022.10'
   send_mail = 'send-mail.py'
   torch_test = 'torch-test.py'
 
@@ -48,6 +48,9 @@ def create_job_script(args):
     raise Exception(f'Results file exists: {results_file_path}')
   open(results_file_path, 'w').close()
 
+  # Options
+  prog_options = f'--inference {args.inference}' if args.inference else ''
+
   # Create the job file
   script = f'{name}.sh'
   with open(script, 'w') as f:
@@ -76,7 +79,6 @@ def create_job_script(args):
     # job script
     run = 'exec' if args.exec else 'cmd'
     comment = '' if args.exec else '#'
-    dollar = '$'
     print(inspect.cleandoc('''
       function msg {{
         echo $(date "+[%F %T]") $@
@@ -111,7 +113,7 @@ def create_job_script(args):
                    username=args.username)), file=f);
     for id in set(args.ID):
       debug_flag = '--debug' if args.debug else ''
-      print(f'runcmd python {omero_screen_prog} -r {results_dir} '\
+      print(f'runcmd python {omero_screen_prog} {prog_options} -r {results_dir} '\
         f'-f {results_file} {debug_flag} {id}', file=f)
     # e-mail the user how to collect the results
     # Note: using mailx on the HPC is flakey (either delayed or fails).
@@ -183,6 +185,8 @@ def parse_args():
   group = parser.add_argument_group('Omero Screen overrides')
   group.add_argument('-d', '--debug', dest='debug', action='store_true',
     help='Debug mode')
+  group.add_argument("--inference", type=str, default=None, metavar="MODEL",
+    help="Inference model filename.")
 
   return parser.parse_args()
 
