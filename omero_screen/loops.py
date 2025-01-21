@@ -10,14 +10,14 @@ from omero_screen.omero_functions import load_fig, load_csvdata, delete_annotati
 from omero_screen.quality_figure import quality_control_fig
 from omero_screen.cellcycle_analysis import cellcycle_analysis, combplot
 from omero_screen.general_functions import omero_connect
-from omero_screen.gallery_figure import save_gallery
+from omero_screen.gallery_figure import create_gallery
 
 from omero.gateway import BlitzGateway
 import tqdm
 import torch
 import pandas as pd
 import pathlib
-from typing import Tuple
+from typing import Tuple, Dict
 import logging
 import matplotlib.pyplot as plt
 
@@ -53,7 +53,8 @@ def plate_loop(plate_id: int, conn: BlitzGateway):
     Main loop to process a plate.
     :param plate_id: ID of the plate
     :param conn: Connection to OMERO
-    :return: Two DataFrames containing the final data and quality control data
+    :return: Three DataFrames containing the final data and quality control data; dictionary of
+    matplotlib figures of the inference gallery keyed by class (can be None)
     """
     logger.info(f"Processing plate {plate_id}")
     metadata = MetaData(conn, plate_id=plate_id)
@@ -70,7 +71,7 @@ def plate_loop(plate_id: int, conn: BlitzGateway):
 
     print_device_info()
 
-    df_final, df_quality_control = process_wells(
+    df_final, df_quality_control, dict_gallery = process_wells(
         metadata, project_data, flatfield_dict, conn
     )
     logger.debug(f"Final data sample: {df_final.head()}")
@@ -99,8 +100,8 @@ def plate_loop(plate_id: int, conn: BlitzGateway):
     else:
         df_final_cc = None
 
-    save_results(df_final, df_final_cc, df_quality_control, metadata, plate_name, conn)
-    return df_final, df_final_cc, df_quality_control
+    save_results(df_final, df_final_cc, df_quality_control, dict_gallery, metadata, plate_name, conn)
+    return df_final, df_final_cc, df_quality_control, dict_gallery
 
 
 def print_device_info() -> None:
@@ -118,7 +119,7 @@ def process_wells(
     project_data: ProjectSetup,
     flatfield_dict: dict,
     conn: BlitzGateway,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, Dict | None]:
     """
     Process the wells of the plate.
     :param metadata: Metadata associated with the plate
@@ -127,7 +128,8 @@ def process_wells(
     :param conn: Connection to OMERO
     :param inference_model: Inference model name
     :param gallery_width: Width N of inference gallery (NxN)
-    :return: Two DataFrames containing the final data and quality control data
+    :return: Two DataFrames containing the final data and quality control data; dictionary of
+    matplotlib figures of the inference gallery keyed by class (can be None)
     """
     df_final = pd.DataFrame()
     df_quality_control = pd.DataFrame()
@@ -154,22 +156,24 @@ def process_wells(
             df_quality_control = pd.concat([df_quality_control, well_quality])
 
     # Create and save galleries after the loop
+    dict_gallery = None
     if image_classifier is not None and gallery_width:
-        logger.info("Generating and saving gallery images")
+        logger.info("Generating gallery images")
+        dict_gallery = {}
         for class_name, data in image_classifier.gallery_dict.items():
             selected_images, total = data
             if selected_images:
-                output_path = pathlib.Path.home() / f"inference_{metadata.plate_id}_{class_name}.png"
-                save_gallery(str(output_path.resolve()), selected_images, gallery_width)
-                logger.info(f"Gallery saved for class '{class_name}' at {output_path}: {len(selected_images)}/{total}")
+                dict_gallery[class_name] = create_gallery(selected_images, gallery_width)
+                logger.info(f"Gallery created for class '{class_name}': {len(selected_images)}/{total}")
 
-    return df_final, df_quality_control
+    return df_final, df_quality_control, dict_gallery
 
 
 def save_results(
     df_final: pd.DataFrame,
     df_final_cc,
     df_quality_control: pd.DataFrame,
+    dict_gallery: Dict | None,
     metadata: MetaData,
     plate_name: str,
     conn: BlitzGateway,
@@ -178,6 +182,7 @@ def save_results(
     Save the results to CSV files.
     :param df_final: DataFrame containing the final data
     :param df_quality_control: DataFrame containing quality control data
+    :param dict_gallery: Dictionary of inference galleries as matplotlib.figure.Figure (or None)
     :param plate_name: Name of the plate
     """
     # delete pre-existing data
@@ -200,6 +205,10 @@ def save_results(
     df_quality_control.to_csv(path / f"{plate_name}_quality_ctr.csv")
     quality_fig = quality_control_fig(df_quality_control)
     load_fig(quality_fig, metadata.plate_obj, f"{plate_name}_quality_ctr", conn)
+    # load inference gallery
+    if dict_gallery != None:
+        for cat, fig in dict_gallery.items():
+            load_fig(fig, metadata.plate_obj, f"inference_{cat}", conn)
 
 
 # TODO Rename this here and in `save_results`

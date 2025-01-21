@@ -52,12 +52,12 @@ def _create_heatmap_with_contours(image: np.ndarray, threshold_value: int = 10) 
 
     return processed_image
 
-def save_gallery(filename: str, images: list, grid_size: int):
+def create_gallery(images: list, grid_size: int):
     """
     Generates a gallery figure of the images in a grid.
-    :param filename: Output filename
     :param images: List of numpy 2D image arrays
     :param grid_size: Edge length of the grid
+    :return: matplotlib.figure.Figure
     """
     fig, axs = plt.subplots(grid_size, grid_size, figsize=(20, 20), facecolor="white")
     axs = axs.reshape(grid_size, grid_size)  # Ensure axs is a 2D grid
@@ -67,6 +67,4 @@ def save_gallery(filename: str, images: list, grid_size: int):
             ax.imshow(_create_heatmap_with_contours(images[idx]))
         ax.axis('off')
 
-    plt.tight_layout()
-    plt.savefig(filename, bbox_inches="tight", facecolor="white")
-    plt.close()
+    return fig
