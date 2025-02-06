@@ -18,16 +18,13 @@ logger = logging.getLogger("omero-screen")
 
 class ImageClassifier:
     """
-    Class to process a collection of images with various operations, including normalization,
-    cropping (based on centroids), mask application, and duplicate removal. Each step visualizes the result.
+    Classify images using a model.
     """
-
     def __init__(self, conn, model_name):
         """
-        Initialize the processor with images, metadata path, and optional masks.
-        :param images (list[dict]): List of image dictionaries, each containing channel data.
-        :param metadata_path (str): Path to the metadata JSON file.
-        :param masks (list[np.ndarray]): List of masks corresponding to the images (optional).
+        Initialize the classifier.
+        :param conn: OMERO connection.
+        :param model_name: Name of model.
         """
         self.image_data = None
         self.crop_size = 100
@@ -40,99 +37,91 @@ class ImageClassifier:
         self.cropped_images = []
         self.processed_images = []  # Store processed image data for all images
         self.crop_coords_list = []  # Store crop coordinates for all images
-        self.selected_channels = {}
+        self.selected_channels = []
         self.gallery_dict = {}
 
-        self.model, self.active_channels, self.class_options = self._load_model_from_omero("CNN_Models", model_name, model_name+".pth", conn)
+        self.model, self.active_channels, self.class_options = self._load_model_from_omero(
+          "CNN_Models", model_name, conn)
 
-    def _load_model_from_omero(self, project_name, dataset_name,
-                               model_filename, conn=None):
+    def _load_model_from_omero(self, project_name, dataset_name, conn=None):
+        model_filename = self._download_file(project_name, dataset_name, dataset_name + ".pth", conn)
+        if not model_filename:
+            return None, None, None
+        meta_filename = self._download_file(project_name, dataset_name, "metadata.json", conn, force=True)
+        if not meta_filename:
+            return None, None, None
 
-        file_path = pathlib.Path.home() / model_filename
-
-        # If the model file does not exist locally
-        if not os.path.exists(file_path):
-            # Find the project in OMERO
-            project = conn.getObject("Project", attributes={"name": project_name})
-            if project is None:
-                logger.warning(f"Project '{project_name}' not found in OMERO.")
-                return None, None, None
-
-            # Find the dataset in OMERO
-            dataset = next((ds for ds in project.listChildren() if ds.getName() == dataset_name), None)
-            if dataset is None:
-                logger.warning(f"Dataset '{dataset_name}' not found in project '{project_name}'.")
-                return None, None, None
-
-            # Check annotations in the dataset
-            model_found = False
-            for attachment in dataset.listAnnotations():
-                if isinstance(attachment, omero.gateway.FileAnnotationWrapper):
-                    # Download the model file
-                    if attachment.getFileName() == model_filename:
-                        with open(file_path, "wb") as f:
-                            for chunk in attachment.getFileInChunks():
-                                f.write(chunk)
-                        logger.info(f"Downloaded model file to {file_path}")
-                        model_found = True
-                        break
-            if not model_found:
-                logger.warning(f"File '{model_filename}' not found in dataset '{dataset_name}' under project '{project_name}'.")
-                return None, None, None
-
-        # If the model file is downloaded, download the Key-Value Pairs
         # Extract image channels
-        active_channels, class_options = self._download_metadata_and_extract_channels(dataset_name, conn)
+        active_channels, class_options = self._extract_channels(meta_filename)
 
         if active_channels:
             print(f"Active Channels: {active_channels}")
         else:
             print("No active channels found.")
+            return None, None, None
 
         # list of random samples, total number of items
         self.gallery_dict = {class_name: [[], 0] for class_name in class_options}
 
         # Load the model
-        model = ROIBasedDenseNetModel(num_classes=len(class_options), num_channels=len(active_channels))
-        model.load_state_dict(torch.load(file_path, weights_only=True, map_location=torch.device('cpu')))
+        # Currently this tries repeatedly with different models.
+        # TODO: Change to use TorchScript to save the model and weights together.
+        state = torch.load(model_filename, weights_only=True, map_location=torch.device('cpu'))
+        try:
+            model = ROIBasedDenseNetModel(num_classes=len(class_options), num_channels=len(active_channels))
+            model.load_state_dict(state)
+        except:
+            model = ROIBasedDenseNetModel(num_classes=len(class_options), num_channels=len(active_channels), network=121)
+            model.load_state_dict(state)
         model = model.to(self.device)  # Move model to the device
         model.eval()
         return model, active_channels, class_options
 
-    def _download_metadata_and_extract_channels(self, dataset_name, conn):
+    def _download_file(self, project_name, dataset_name, file_name, conn, force=False):
         """
-        Download the metadata.json file associated with the model and extract active channels.
+        Download the file attachment.
+        :param project_name (str): The name of the project in OMERO.
         :param dataset_name (str): The name of the dataset in OMERO.
-        :param model_name (str): The name of the model (used to locate metadata.json).
+        :param file_name (str): The name of the file attachment in OMERO.
         :param conn: OMERO connection object.
-        :return: list: A list of active channels if found, otherwise an empty list.
+        :return: str: Path to local file (or None).
         """
-        metadata_file_name = "metadata.json"
-        metadata_local_path = pathlib.Path.home() / metadata_file_name
+        local_path = pathlib.Path.home() / '.cache' / 'omero_screen' / file_name
 
-        # Find the dataset in OMERO
-        dataset = conn.getObject("Dataset", attributes={"name": dataset_name})
-        if dataset is None:
-            logger.warning(f"Dataset '{dataset_name}' not found in OMERO.")
-            return []
+        # If the model file does not exist locally
+        if force or not os.path.exists(local_path):
+            # Find the project in OMERO
+            project = conn.getObject("Project", attributes={"name": project_name})
+            if project is None:
+                logger.warning(f"Project '{project_name}' not found in OMERO.")
+                return None
 
-        # Check for metadata.json in the dataset
-        for annotation in dataset.listAnnotations():
-            if isinstance(annotation, omero.gateway.FileAnnotationWrapper):
-                if annotation.getFileName() == metadata_file_name:
-                    # Download the metadata.json file
-                    with open(metadata_local_path, "wb") as f:
-                        for chunk in annotation.getFileInChunks():
-                            f.write(chunk)
-                    logger.info(f"Downloaded metadata file to {metadata_local_path}")
-                    break
-        else:
-            logger.warning(f"Metadata file '{metadata_file_name}' not found in dataset '{dataset_name}'.")
-            return []
+            # Find the dataset in OMERO
+            dataset = next((ds for ds in project.listChildren() if ds.getName() == dataset_name), None)
+            if dataset is None:
+                logger.warning(f"Dataset '{dataset_name}' not found in project '{project_name}'.")
+                return None
 
+            # Check annotations in the dataset
+            for attachment in dataset.listAnnotations():
+                if isinstance(attachment, omero.gateway.FileAnnotationWrapper):
+                    # Download the model file
+                    if attachment.getFileName() == file_name:
+                        with open(local_path, "wb") as f:
+                            for chunk in attachment.getFileInChunks():
+                                f.write(chunk)
+                        logger.info(f"Downloaded model file to {local_path}")
+                        return local_path
+
+            logger.warning(f"File '{file_name}' not found in dataset '{dataset_name}' under project '{project_name}'.")
+            return None
+        # Already cached
+        return local_path
+
+    def _extract_channels(self, meta_filename):
         # Read the metadata.json file and extract active channels
         try:
-            with open(metadata_local_path, "r") as f:
+            with open(meta_filename, "r") as f:
                 metadata = json.load(f)
                 if "user_data" in metadata and "channels" in metadata["user_data"]:
                     active_channels = metadata["user_data"]["channels"]
@@ -144,16 +133,24 @@ class ImageClassifier:
                     logger.info(f"Crop Size: {self.crop_size}")
                     return active_channels, class_options
                 else:
-                    logger.warning(f"Metadata file '{metadata_file_name}' does not contain 'channels' information.")
-                    return []
+                    logger.warning(f"Metadata file '{meta_filename}' does not contain 'channels' information.")
         except Exception as e:
-            logger.error(f"Error reading metadata file '{metadata_file_name}': {e}")
-            return []
+            logger.error(f"Error reading metadata file '{meta_filename}': {e}")
+        return [], []
 
     def select_channels(self, image_data):
-        self.image_data = image_data
-        self.selected_channels = {channel: image_data[channel] for channel in self.active_channels}
-        logger.info(f"Selected channels for classification: {self.selected_channels.keys()}")
+        """
+        Select the channels from the image_data to be used for classification.
+        If this method returns False then the classifier is not able to process the images.
+        :param image_data (Dict): Dictionary of images keyed by channel name.
+        :return: bool: True if the channels were selected.
+        """
+        if self.active_channels:
+            self.image_data = image_data
+            self.selected_channels = [image_data[channel] for channel in self.active_channels]
+            logger.info(f"Selected channels for classification: {self.active_channels}")
+            return True
+        return False
 
     # Duplicate removal function
     def _remove_duplicate_cyto_ids(self, images, cyto_id_column="Cyto_ID"):
@@ -168,6 +165,8 @@ class ImageClassifier:
         return unique_images
 
     def process_images(self, original_images, mask):
+        if len(self.selected_channels) == 0:
+            return
 
         predicted_classes = []
 
@@ -175,12 +174,12 @@ class ImageClassifier:
         images = self._remove_duplicate_cyto_ids(original_images)
         print("Images length after removing duplicates : ", len(images))
 
-        target_size = (100, 100)  # Target size (height, width)
+        target_size = (self.crop_size, self.crop_size)  # Target size (height, width)
         half_crop = self.crop_size // 2
 
         # Assume YX are the last dimensions
-        max_length_x = self.selected_channels[self.active_channels[0]].shape[-1]
-        max_length_y = self.selected_channels[self.active_channels[0]].shape[-2]
+        max_length_x = self.selected_channels[0].shape[-1]
+        max_length_y = self.selected_channels[0].shape[-2]
 
         # Batch processing
         total = len(images["centroid-0"])
@@ -193,7 +192,7 @@ class ImageClassifier:
 
             batch = []
             for i in range(start, stop):
-                # Center the crop around the centroid coordinates with a 100x100 area
+                # Center the crop around the centroid coordinates
                 centroid_x = images["centroid-1_x"].iloc[i]
                 centroid_y = images["centroid-0_y"].iloc[i]
 
@@ -215,7 +214,7 @@ class ImageClassifier:
 
                 # Crop image
                 for channel in self.selected_channels:
-                    cropped_image = self._crop(self.selected_channels[channel], x0, y0, x1, y1)
+                    cropped_image = self._crop(channel, x0, y0, x1, y1)
                     combined_channels.append(cropped_image)
 
                 # Remove pixels outside the mask
@@ -229,6 +228,7 @@ class ImageClassifier:
             # Create tensor (B, C, H, W)
             batch = np.array(batch)
             image_tensor = torch.tensor(batch, dtype=torch.float32)
+            # TODO: resize should be defined in the metadata
             image_tensor = transforms.Resize((224,224))(image_tensor)
 
             classes = self._classify(image_tensor)
@@ -242,8 +242,8 @@ class ImageClassifier:
                     l, s = a
                     s = s + 1
                     a[1] = s
-                    # Image must be 2D, take the first channel
-                    img = batch[idx][0]
+                    # Image is CYX
+                    img = batch[idx]
                     if s <= self.gallery_size:
                         # Gallery size not yet reached
                         l.append(img)

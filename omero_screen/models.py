@@ -4,11 +4,14 @@ import torch.nn as nn
 from torchvision import models as torch_models
 
 class ROIBasedDenseNetModel(nn.Module):
-    def __init__(self, num_classes, num_channels):
+    def __init__(self, num_classes, num_channels, network=201):
         super(ROIBasedDenseNetModel, self).__init__()
 
         # Pretrained DenseNet model
-        self.roi_model = torch_models.densenet201(weights='DEFAULT')
+        if network == 121:
+            self.roi_model = torch_models.densenet121()
+        else:
+            self.roi_model = torch_models.densenet201()
         self.roi_model.features.conv0 = nn.Conv2d(num_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)  # Set the number of input channels to 2
         self.roi_model.features.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Downsample output to a fixed size
         num_features_roi = self.roi_model.classifier.in_features
