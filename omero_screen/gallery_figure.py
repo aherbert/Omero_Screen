@@ -8,19 +8,35 @@ from io import BytesIO
 def _create_heatmap_with_contours(image: np.ndarray, threshold_value: int = 10) -> np.ndarray:
     """
     Generates a heatmap with contours on a white background directly in memory.
-    :param image: Input grayscale image (single channel).
+    Note: Multi-channel images use the first 3 channels as RBG and converted to greyscale.
+    :param image: Input grayscale image (single channel), or CYX multi-channel.
     :param threshold_value: Threshold value for contour detection (default: 50).
     :return: np.ndarray: Processed image with heatmap and contours.
     """
+    # Ensure the image is CYX for processing
+    if len(image.shape) == 2:
+        image = np.expand_dims(image, axis=0)
+    elif len(image.shape) == 3:
+        pass
+    else:
+        raise Exception(f'Unsupported image shape: {image.shape}')
+
     # Normalize the image to the range 0-255
-    image_normalized = cv2.normalize(image, None, 0, 255, cv2.NORM_MINMAX).astype('uint8')
+    image_normalized = np.array([cv2.normalize(x, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+      for x in image])
 
     # Ensure the image is single-channel
-    if len(image_normalized.shape) > 2:
-        if image_normalized.shape[2] == 3:  # If the image is RGB
-            image_normalized = cv2.cvtColor(image_normalized, cv2.COLOR_BGR2GRAY)
+    s = image_normalized.shape
+    if s[0] == 1:
+        image_normalized = image_normalized[0]
+    else:
+        # multi-channel
+        # Pad with a blank plane or crop to 3 channels and convert RGB to greyscale
+        if s[0] == 2:
+            image_normalized = np.concatenate([image_normalized, np.zeros((1, s[1], s[2]), dtype=np.uint8)])
         else:
-            return image
+            image_normalized = image_normalized[0:3]
+        image_normalized = cv2.cvtColor(image_normalized.transpose((1,2,0)), cv2.COLOR_BGR2GRAY)
 
     # Thresholding to reduce noise
     _, thresholded_image = cv2.threshold(image_normalized, threshold_value, 255, cv2.THRESH_BINARY)
