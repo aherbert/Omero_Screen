@@ -4,14 +4,11 @@ import torch
 import omero
 
 from tqdm import tqdm
-import os
 import json
-from torchvision import transforms
 import logging
 import pathlib
+import skimage
 from random import randrange
-
-from omero_screen.models import ROIBasedDenseNetModel
 
 logger = logging.getLogger("omero-screen")
 
@@ -27,7 +24,8 @@ class ImageClassifier:
         :param model_name: Name of model.
         """
         self.image_data = None
-        self.crop_size = 100
+        self.crop_size = 0
+        self.input_shape = None
         self.gallery_size = 0
         self.batch_size = 16
         if torch.cuda.is_available():
@@ -44,10 +42,10 @@ class ImageClassifier:
           "CNN_Models", model_name, conn)
 
     def _load_model_from_omero(self, project_name, dataset_name, conn=None):
-        model_filename = self._download_file(project_name, dataset_name, dataset_name + ".pth", conn)
+        model_filename = self._download_file(project_name, dataset_name, dataset_name + ".pt", conn)
         if not model_filename:
             return None, None, None
-        meta_filename = self._download_file(project_name, dataset_name, "metadata.json", conn, force=True)
+        meta_filename = self._download_file(project_name, dataset_name, dataset_name + ".json", conn)
         if not meta_filename:
             return None, None, None
 
@@ -64,20 +62,12 @@ class ImageClassifier:
         self.gallery_dict = {class_name: [[], 0] for class_name in class_options}
 
         # Load the model
-        # Currently this tries repeatedly with different models.
-        # TODO: Change to use TorchScript to save the model and weights together.
-        state = torch.load(model_filename, weights_only=True, map_location=torch.device('cpu'))
-        try:
-            model = ROIBasedDenseNetModel(num_classes=len(class_options), num_channels=len(active_channels))
-            model.load_state_dict(state)
-        except:
-            model = ROIBasedDenseNetModel(num_classes=len(class_options), num_channels=len(active_channels), network=121)
-            model.load_state_dict(state)
-        model = model.to(self.device)  # Move model to the device
+        model = torch.jit.load(model_filename, map_location=torch.device('cpu'))
+        model = model.to(self.device)
         model.eval()
         return model, active_channels, class_options
 
-    def _download_file(self, project_name, dataset_name, file_name, conn, force=False):
+    def _download_file(self, project_name, dataset_name, file_name, conn):
         """
         Download the file attachment.
         :param project_name (str): The name of the project in OMERO.
@@ -89,7 +79,9 @@ class ImageClassifier:
         local_path = pathlib.Path.home() / '.cache' / 'omero_screen' / file_name
 
         # If the model file does not exist locally
-        if force or not os.path.exists(local_path):
+        if not local_path.exists():
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+          
             # Find the project in OMERO
             project = conn.getObject("Project", attributes={"name": project_name})
             if project is None:
@@ -123,17 +115,21 @@ class ImageClassifier:
         try:
             with open(meta_filename, "r") as f:
                 metadata = json.load(f)
-                if "user_data" in metadata and "channels" in metadata["user_data"]:
-                    active_channels = metadata["user_data"]["channels"]
-                    class_options = metadata["class_options"]
-                    self.crop_size = int(metadata["user_data"]["crop_size"])
-                    class_options.remove("unassigned")
+                active_channels = metadata.get('channels', [])
+                class_options = metadata.get('labels', [])
+                img_shape = metadata.get('img_shape', None)
+                input_shape = metadata.get('input_shape', None)
+                if active_channels and class_options and img_shape and input_shape:
+                    # assume a square image for cropping
+                    self.crop_size = img_shape[-1]
+                    self.input_shape = tuple(input_shape[-2:])
                     logger.info(f"Active channels extracted: {active_channels}")
                     logger.info(f"Class options: {class_options}")
                     logger.info(f"Crop Size: {self.crop_size}")
+                    logger.info(f"Input shape: {self.input_shape}")
                     return active_channels, class_options
                 else:
-                    logger.warning(f"Metadata file '{meta_filename}' does not contain 'channels' information.")
+                    logger.warning(f"Metadata file '{meta_filename}' does not contain required information.")
         except Exception as e:
             logger.error(f"Error reading metadata file '{meta_filename}': {e}")
         return [], []
@@ -152,29 +148,17 @@ class ImageClassifier:
             return True
         return False
 
-    # Duplicate removal function
-    def _remove_duplicate_cyto_ids(self, images, cyto_id_column="Cyto_ID"):
-        """
-        Remove duplicate rows based on the specified Cyto_ID column.
-        :param images (pd.DataFrame): DataFrame containing the data.
-        :param cyto_id_column (str): The name of the Cyto_ID column.
-        :return: pd.DataFrame: DataFrame with duplicates removed.
-        """
-        # Drop duplicates based on the Cyto_ID column
-        unique_images = images.drop_duplicates(subset=cyto_id_column, keep='first')
-        return unique_images
-
-    def process_images(self, original_images, mask):
+    def process_images(self, original_image_df, mask):
         if len(self.selected_channels) == 0:
             return
 
         predicted_classes = []
 
-        print("Images length before removing duplicates : ", len(original_images))
-        images = self._remove_duplicate_cyto_ids(original_images)
-        print("Images length after removing duplicates : ", len(images))
+        # Entries may share the same cytoplasm ID, e.g. cells with multiple nuclei
+        image_df = original_image_df.drop_duplicates(subset="Cyto_ID", keep='first')
+        logger.info("Classification of %d cyto IDs (%d items)", len(image_df), len(original_image_df))
 
-        target_size = (self.crop_size, self.crop_size)  # Target size (height, width)
+        img_size = (self.crop_size, self.crop_size)  # Target size (height, width)
         half_crop = self.crop_size // 2
 
         # Assume YX are the last dimensions
@@ -182,7 +166,7 @@ class ImageClassifier:
         max_length_y = self.selected_channels[0].shape[-2]
 
         # Batch processing
-        total = len(images["centroid-0"])
+        total = len(image_df["centroid-0"])
         step = self.batch_size
         pbar = tqdm(total=total)
         for start in range(0, total, step):
@@ -193,15 +177,13 @@ class ImageClassifier:
             batch = []
             for i in range(start, stop):
                 # Center the crop around the centroid coordinates
-                centroid_x = images["centroid-1_x"].iloc[i]
-                centroid_y = images["centroid-0_y"].iloc[i]
+                centroid_x = image_df["centroid-1_x"].iloc[i]
+                centroid_y = image_df["centroid-0_y"].iloc[i]
 
                 x0 = int(max(0, centroid_x - half_crop))
                 x1 = int(min(max_length_x, centroid_x + half_crop))
                 y0 = int(max(0, centroid_y - half_crop))
                 y1 = int(min(max_length_y, centroid_y + half_crop))
-
-                combined_channels = []
 
                 # Crop mask
                 cropped_mask = self._crop(mask, x0, y0, x1, y1).copy()
@@ -212,26 +194,29 @@ class ImageClassifier:
                 # Convert mask to binary
                 binary_mask = (corrected_mask > 0).astype(np.uint8)
 
-                # Crop image
-                for channel in self.selected_channels:
-                    cropped_image = self._crop(channel, x0, y0, x1, y1)
-                    combined_channels.append(cropped_image)
-
-                # Remove pixels outside the mask
-                latest_image = self._extract_roi_multichannel(np.stack(combined_channels), binary_mask)
-
-                # Normalise
-                max_val = np.max(latest_image, axis=(1,2))
-                padded_image = self._add_padding(latest_image / max_val[:,None,None], target_size)
-                batch.append(padded_image)
+                # Create cropped YXC image
+                img = np.dstack([self._crop(i, x0, y0, x1, y1) for i in self.selected_channels])
+                # Image normalisation copied from training repo cellclass:src/bin/create_dataset.py
+                # Extract (1, 99) percentile and convert to 8-bit
+                img = self._to_uint8(img)
+                # Remove pixels outside the mask (transforms image to CYX)
+                img = self._extract_roi(img, binary_mask)
+                # Pad to required image size
+                img = self._add_padding(img, img_size)
+                batch.append(img)
 
             # Create tensor (B, C, H, W)
             batch = np.array(batch)
-            image_tensor = torch.tensor(batch, dtype=torch.float32)
-            # TODO: resize should be defined in the metadata
-            image_tensor = transforms.Resize((224,224))(image_tensor)
 
-            classes = self._classify(image_tensor)
+            # Value scaling: [0,255] -> [0,1]
+            tensor = np.divide(batch, 255, dtype=np.float32)
+            # Resize to model input size
+            output_shape = batch.shape[0:2] + self.input_shape
+            tensor = skimage.transform.resize(tensor, output_shape, mode='edge')
+            # Convert to tensor in place
+            tensor = torch.from_numpy(tensor)
+
+            classes = self._classify(tensor)
             predicted_classes.extend(classes)
 
             # Optional gallery
@@ -253,15 +238,13 @@ class ImageClassifier:
                         if i < self.gallery_size:
                             l[i] = img
 
-        images = images.assign(Class=predicted_classes)
+        image_df = image_df.assign(Class=predicted_classes)
 
-        original_images = original_images.merge(
-            images[["Cyto_ID", "Class"]],
+        return original_image_df.merge(
+            image_df[["Cyto_ID", "Class"]],
             on="Cyto_ID",
             how="left"
         )
-
-        return original_images
 
     def _classify(self, image_tensor):
 
@@ -294,32 +277,35 @@ class ImageClassifier:
             raise Exception("Image classifier only supports 2D images: " + image.shape)
         return i[y0:y1, x0:x1]
 
-    def _extract_roi_multichannel(self, image, binary_mask):
+    def _to_uint8(self, image: np.ndarray) -> np.ndarray:
+        """
+        Convert image to uint8 using the (1, 99) percentiles.
+        """
+        out = np.zeros(image.shape, dtype=np.uint8)
+        for c in range(image.shape[-1]):
+            data = image[..., c]
+            pmin, pmax = np.percentile(data, (1, 99))
+            # Rescale 0-1
+            data = (data - pmin) / (pmax - pmin)
+            # Clip to range
+            data[data<0] = 0
+            data[data>1] = 1
+            # Convert to 0-255
+            out[..., c] = (data * 255).astype(np.uint8)
+        return out
+
+    def _extract_roi(self, image, binary_mask):
         """
         Extracts the ROI (Region of Interest) from a multi-channel image using the mask.
-        :param image (numpy array): Multi-channel input image (channels, height, width).
-        :param binary_mask (numpy array): Mask image (should have the same height and width).
-        :return: numpy array: Cropped ROI with masked regions.
+        :param image (numpy array): Multi-channel input image (YXC).
+        :param binary_mask (numpy array): Mask image (YX).
+        :return: numpy array: ROI (CYX)
         """
-
-        coords = np.argwhere(binary_mask > 0)
-        if len(coords) == 0:  # Ensure there are non-zero mask regions
-            # Return full image if no ROI is found
-            return image
-
-        if image.ndim == 2:  # Single channel (height, width)
-            image = np.expand_dims(image, axis=-1)
-
         # Apply the mask to all channels
         roi = np.zeros_like(image)
-        for channel in range(image.shape[0]):
-            roi[channel, ...] = image[channel, ...] * binary_mask
-
-        # Crop the masked region
-        y0, x0 = coords.min(axis=0)
-        y1, x1 = coords.max(axis=0) + 1
-        roi_cropped = roi[:, y0:y1, x0:x1]
-        return roi_cropped
+        for channel in range(image.shape[-1]):
+            roi[..., channel] = image[..., channel] * binary_mask
+        return roi.transpose((2,0,1))
 
     def _add_padding(self, image, target_size, padding_value=0):
         """
@@ -353,11 +339,6 @@ class ImageClassifier:
         # Apply padding
         padded_image = np.pad(image, padding_config, mode='constant', constant_values=padding_value)
         return padded_image
-
-    def _mask_image(self, image, mask):
-        binary_mask = mask / mask.max()  # Normalize between 0 and 1
-        masked_image = image * binary_mask
-        return masked_image
 
     def _erase_masks(self, cropped_label: np.ndarray, cx: int, cy: int) -> np.ndarray:
         """
