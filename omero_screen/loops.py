@@ -137,9 +137,7 @@ def process_wells(
     inference_model = Defaults['INFERENCE_MODEL']
     gallery_width =  Defaults["INFERENCE_GALLERY_WIDTH"]
     if inference_model:
-        image_classifier = ImageClassifier(conn, inference_model)
-        image_classifier.gallery_size = gallery_width**2
-        image_classifier.batch_size = Defaults["INFERENCE_BATCH_SIZE"]
+        image_classifier = [_create_classifier(conn, x, gallery_width) for x in inference_model]
     for count, well in enumerate(list(metadata.plate_obj.listChildren())):
         ann = well.getAnnotation(Defaults["NS"])
         try:
@@ -160,13 +158,22 @@ def process_wells(
     if image_classifier is not None and gallery_width:
         logger.info("Generating gallery images")
         dict_gallery = {}
-        for class_name, data in image_classifier.gallery_dict.items():
-            selected_images, total = data
-            if selected_images:
-                dict_gallery[class_name] = create_gallery(selected_images, gallery_width)
-                logger.info(f"Gallery created for class '{class_name}': {len(selected_images)}/{total}")
+        for cls in image_classifier:
+            prefix = cls.class_name + '_'
+            for predicted_class, data in cls.gallery_dict.items():
+                selected_images, total = data
+                if selected_images:
+                    dict_gallery[prefix + predicted_class] = create_gallery(selected_images, gallery_width)
+                    logger.info(f"Gallery created for '{cls.class_name}/{predicted_class}': {len(selected_images)}/{total}")
 
     return df_final, df_quality_control, dict_gallery
+
+
+def _create_classifier(conn, model_name, gallery_width):
+    image_classifier = ImageClassifier(conn, model_name, class_name=model_name)
+    image_classifier.gallery_size = gallery_width**2
+    image_classifier.batch_size = Defaults["INFERENCE_BATCH_SIZE"]
+    return image_classifier
 
 
 def save_results(

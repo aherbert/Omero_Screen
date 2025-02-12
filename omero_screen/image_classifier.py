@@ -17,7 +17,7 @@ class ImageClassifier:
     """
     Classify images using a model.
     """
-    def __init__(self, conn, model_name):
+    def __init__(self, conn, model_name, class_name='Class'):
         """
         Initialize the classifier.
         :param conn: OMERO connection.
@@ -28,6 +28,7 @@ class ImageClassifier:
         self.input_shape = None
         self.gallery_size = 0
         self.batch_size = 16
+        self.class_name = class_name
         if torch.cuda.is_available():
             self.device = torch.device("cuda")
         else:
@@ -238,10 +239,10 @@ class ImageClassifier:
                         if i < self.gallery_size:
                             l[i] = img
 
-        image_df = image_df.assign(Class=predicted_classes)
+        image_df.insert(len(image_df.columns), self.class_name, predicted_classes)
 
         return original_image_df.merge(
-            image_df[["Cyto_ID", "Class"]],
+            image_df[["Cyto_ID", self.class_name]],
             on="Cyto_ID",
             how="left"
         )

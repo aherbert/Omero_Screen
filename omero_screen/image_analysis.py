@@ -230,8 +230,10 @@ class ImageProperties:
         self.image_df = self._combine_channels(featurelist)
         self.quality_df = self._concat_quality_df()
 
-        if image_classifier is not None and image_classifier.select_channels(image_obj.img_dict):
-            self.image_df = image_classifier.process_images(self.image_df, image_obj.c_mask)
+        if image_classifier is not None:
+            for cls in image_classifier:
+                if cls.select_channels(image_obj.img_dict):
+                    self.image_df = cls.process_images(self.image_df, image_obj.c_mask)
 
     def _overlay_mask(self) -> pd.DataFrame:
         """Links nuclear IDs with cell IDs"""
