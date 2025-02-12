@@ -10,7 +10,7 @@ def _create_heatmap_with_contours(image: np.ndarray, threshold_value: int = 10) 
     Generates a heatmap with contours on a white background directly in memory.
     Note: Multi-channel images use the first 3 channels as RBG and converted to greyscale.
     :param image: Input grayscale image (single channel), or CYX multi-channel.
-    :param threshold_value: Threshold value for contour detection (default: 50).
+    :param threshold_value: Threshold value for contour detection.
     :return: np.ndarray: Processed image with heatmap and contours.
     """
     # Ensure the image is CYX for processing
@@ -68,6 +68,39 @@ def _create_heatmap_with_contours(image: np.ndarray, threshold_value: int = 10) 
 
     return processed_image
 
+def _create_image(image: np.ndarray) -> np.ndarray:
+    """
+    Generates an image (M, N) or (M, N, 3).
+    Note: Multi-channel images use the first 3 channels as RBG.
+    :param image: Input grayscale image (single channel), or CYX multi-channel.
+    :return: np.ndarray: Processed image.
+    """
+    # Ensure the image is CYX for processing
+    if len(image.shape) == 2:
+        image = np.expand_dims(image, axis=0)
+    elif len(image.shape) == 3:
+        pass
+    else:
+        raise Exception(f'Unsupported image shape: {image.shape}')
+
+    # Normalize the image to the range 0-255
+    image_normalized = np.array([cv2.normalize(x, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+      for x in image])
+
+    s = image_normalized.shape
+    if s[0] == 1:
+        # single-channel
+        return image_normalized[0]
+
+    # multi-channel
+    # Pad with a blank plane or crop to 3 channels
+    if s[0] == 2:
+        image_normalized = np.concatenate([image_normalized, np.zeros((1, s[1], s[2]), dtype=np.uint8)])
+    else:
+        image_normalized = image_normalized[0:3]
+    # (C,Y,X) -> (M,N,3)
+    return image_normalized.transpose((1,2,0))
+
 def create_gallery(images: list, grid_size: int):
     """
     Generates a gallery figure of the images in a grid.
@@ -80,7 +113,7 @@ def create_gallery(images: list, grid_size: int):
 
     for idx, ax in enumerate(axs.flat):
         if idx < len(images):
-            ax.imshow(_create_heatmap_with_contours(images[idx]))
+            ax.imshow(_create_image(images[idx]))
         ax.axis('off')
 
     return fig
