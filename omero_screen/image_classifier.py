@@ -291,8 +291,8 @@ class ImageClassifier:
             # Clip to range
             data[data<0] = 0
             data[data>1] = 1
-            # Convert to 0-255
-            out[..., c] = (data * 255).astype(np.uint8)
+            # Convert to [1, 255] to allow masked regions to be distinct at zero
+            out[..., c] = (1 + data * 254).astype(np.uint8)
         return out
 
     def _extract_roi(self, image, binary_mask):
