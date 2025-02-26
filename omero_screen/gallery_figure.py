@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
+from matplotlib.patches import Polygon
 from PIL import Image as PILImage
 from io import BytesIO
 
@@ -113,7 +114,17 @@ def create_gallery(images: list, grid_size: int):
 
     for idx, ax in enumerate(axs.flat):
         if idx < len(images):
-            ax.imshow(_create_image(images[idx]))
+            im = _create_image(images[idx])
+            ax.imshow(im)
+            # Create contours using first channel and assuming non-masked pixels are > 0
+            if len(im.shape) == 3:
+                im = im[:, :, 0]
+            _, thresholded_image = cv2.threshold(im, 0, 255, cv2.THRESH_BINARY)
+            contours, _ = cv2.findContours(thresholded_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            for contour in contours:
+                # contour has shape n x 1 x 2
+                p = Polygon(contour.squeeze(axis=1), fc='none', ec='cyan', lw=1)
+                ax.add_patch(p)
         ax.axis('off')
 
     return fig
