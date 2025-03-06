@@ -96,6 +96,9 @@ class NucImage:
             self._n_mask_array, n_flows, n_styles = segmentation_model.eval(
                 self.img_dict["DAPI"], channels=n_channels
             )
+            # Cellpose returns uint16/uint32. Optimise to uint8 if possible.
+            if self._n_mask_array < 2**8:
+                self._n_mask_array = self._n_mask_array.astype(np.uint8)
             upload_masks(
                 self.dataset_id, self.omero_image, [self._n_mask_array], self._conn
             )

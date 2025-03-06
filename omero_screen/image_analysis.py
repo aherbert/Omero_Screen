@@ -101,7 +101,7 @@ class Image:
         img_array = self.img_dict["DAPI"]
     
         # Initialize an array to store the segmentation masks
-        segmentation_masks = np.zeros_like(img_array)
+        segmentation_masks = np.zeros_like(img_array, dtype=np.uint32)
 
         for t in range(img_array.shape[0]):
             # Select the image at the current timepoint
@@ -112,7 +112,7 @@ class Image:
             
             # Perform segmentation
             n_channels = [[0, 0]]
-            logger.info(f"Segmenting nuclei with diamtere {self.nuc_diameter}")
+            logger.info(f"Segmenting nuclei with diameter {self.nuc_diameter}")
             try:
                 n_mask_array, n_flows, n_styles = segmentation_model.eval(
                     scaled_img_t, channels=n_channels, diameter=self.nuc_diameter, normalize=False
@@ -139,7 +139,7 @@ class Image:
         assert dapi_array.shape[0] == tub_array.shape[0], "Time dimension mismatch between DAPI and Tubulin channels"
         
         # Initialize an array to store the segmentation masks
-        segmentation_masks = np.zeros_like(dapi_array)
+        segmentation_masks = np.zeros_like(dapi_array, dtype=np.uint32)
         
         # Process each timepoint
         for t in range(dapi_array.shape[0]):
@@ -161,6 +161,15 @@ class Image:
             # Store the segmentation mask in the corresponding timepoint
             segmentation_masks[t] = filter_segmentation(c_masks_array)
         return segmentation_masks
+
+    def _compact_mask(self, mask):
+        """Compact the uint32 datatype to the smallest required to store all mask IDs"""
+        m = mask.max()
+        if m < 2**8:
+            return mask.astype(np.uint8)
+        if m < 2**16:
+            return mask.astype(np.uint16)
+        return mask
 
     def _download_masks(self, image_id):
         """Download masks from OMERO server and save as numpy arrays"""
@@ -194,11 +203,13 @@ class Image:
                     self.cyto_mask = None
                 break  # stop the loop once the image is found
         if image_id is None:
-            self.n_mask = self._n_segmentation()
+            n_mask = self._n_segmentation()
             if "Tub" in self.channels:
-                self.c_mask = self._c_segmentation()
+                c_mask = self._c_segmentation()
+                self.n_mask, self.c_mask = self._compact_mask(np.stack([n_mask, c_mask]))
                 self.cyto_mask = self._get_cyto()
             else:
+                self.n_mask = self._compact_mask(n_mask)
                 self.c_mask = None
                 self.cyto_mask = None
             
