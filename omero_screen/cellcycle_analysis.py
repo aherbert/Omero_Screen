@@ -77,6 +77,8 @@ def agg_multinucleates(df: pd.DataFrame) -> pd.DataFrame:
             agg_functions[col] = "max"
         elif "min" in col and "nucleus" in col:
             agg_functions[col] = "min"
+        elif col == "label":
+            agg_functions[col] = lambda x: tuple(x)
         else:
             agg_functions[col] = "mean"
     return df.groupby(str_cols + ["image_id", "Cyto_ID"], as_index=False).agg(
