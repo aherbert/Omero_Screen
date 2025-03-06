@@ -14,6 +14,7 @@ from ezomero import get_image
 
 from skimage import measure
 import pandas as pd
+from pandas.api.types import is_integer_dtype
 import numpy as np
 
 import torch
@@ -300,9 +301,7 @@ class ImageProperties:
         )
         # merge channel data, outer merge combines all area columns into 1
         if self._image.c_mask is not None:
-            nucleus_data = pd.merge(
-                nucleus_data, self._overlay, how="outer", on=["label"]
-            ).dropna(axis=0, how="any")
+            nucleus_data = self._outer_merge(nucleus_data, self._overlay, "label")
         if channel == "DAPI":
             nucleus_data["integrated_int_DAPI"] = (
                 nucleus_data["intensity_mean_DAPI_nucleus"]
@@ -316,15 +315,24 @@ class ImageProperties:
             cyto_data = self._get_properties(
                 self._image.cyto_mask, channel, "cyto", featurelist
             )
-            merge_1 = pd.merge(cell_data, cyto_data, how="outer", on=["label", "timepoint"]).dropna(
-                axis=0, how="any"
-            )
+            merge_1 = self._outer_merge(cell_data, cyto_data, ["label", "timepoint"])
             merge_1 = merge_1.rename(columns={"label": "Cyto_ID"})
-            return pd.merge(nucleus_data, merge_1, how="outer", on=["Cyto_ID", "timepoint"]).dropna(
-                axis=0, how="any"
-            )
+            return self._outer_merge(nucleus_data, merge_1, ["Cyto_ID", "timepoint"])
         else:
             return nucleus_data
+
+    def _outer_merge(self, df1, df2, on):
+        """Perform an outer-join merge on the two pandas dataframes. NA rows are removed and integer columns are restored."""
+        df = pd.merge(df1, df2, how="outer", on=on).dropna(axis=0, how="any")
+        # Outer-join merge will create columns that support NA. This changes int columns to float.
+        # After dropping all the NA rows restore the int columns.
+        for c in df1.columns:
+            if is_integer_dtype(df1[c].dtype) and not is_integer_dtype(df[c].dtype):
+                df[c] = df[c].astype(df1[c].dtype)
+        for c in df2.columns:
+            if is_integer_dtype(df2[c].dtype) and not is_integer_dtype(df[c].dtype):
+                df[c] = df[c].astype(df2[c].dtype)
+        return df
 
     def _combine_channels(self, featurelist):
         channel_data = [
