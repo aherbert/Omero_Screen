@@ -122,6 +122,9 @@ def create_job_script(args):
     # the login nodes.
     subject = f'Job results: {name}'
     msg = f'''
+          Job results: {name}
+          Plate IDs: {' '.join(args.ID)}
+
           rsync -ar --files-from=:{results_file_path} {args.username}@ood.artemis.hrc.sussex.ac.uk:{results_dir} .
 
           Or login (via VPN) to:
